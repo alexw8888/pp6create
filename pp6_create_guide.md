@@ -261,7 +261,7 @@ The text will be centered within the defined box based on the RTF alignment sett
 
 ## Python Implementation
 
-A complete Python implementation (`generate_pp6.py`) is available that:
+A complete Python implementation (`generate_pp6_doc.py`) is available that:
 
 ### Features
 1. **Automatic File Discovery** - Finds all media and text files in a directory:

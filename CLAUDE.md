@@ -13,6 +13,8 @@ This project is for creating a Python program to generate ProPresenter 6 (.pro6)
    - Various .pro6 document files (songs, announcements, sermons)
    - data.pro6pl playlist file
    - Media resources (images, videos) in ProgramData/ and Users/ subdirectories
+3. **generate_pp6_doc.py** - Python module for generating individual ProPresenter 6 documents
+4. **generate_pp6_playlist.py** - Python module for generating complete PP6 playlist directories with proper structure
 
 ## ProPresenter 6 Document Structure
 
@@ -41,26 +43,37 @@ This project is for creating a Python program to generate ProPresenter 6 (.pro6)
 - Standard resolution: 1024×768 or 1920×1080
 
 ### Common Commands
-Since no Python files exist yet, typical development commands would be:
 ```bash
-# Run the generator (once created)
-python generate_pp6.py
+# Generate a single PP6 document
+python generate_pp6_doc.py --title "My Song" --author "John Doe" --content song_lyrics.txt
+
+# Generate a PP6 playlist with sample documents
+python generate_pp6_playlist.py --name "Sunday Service" --generate-docs
+
+# Generate a playlist from existing documents
+python generate_pp6_playlist.py doc1.pro6 doc2.pro6 doc3.pro6
 
 # Validate XML output
 xmllint --noout generated.pro6
-
-# Test with sample data
-python test_generator.py
 ```
 
 ## Architecture Considerations
 
-The Python program should include:
-1. **XML Generator Module** - Core XML structure creation
-2. **Text Encoder Module** - Handle Base64 encoding for all text formats
-3. **Media Handler** - Process and encode media file paths
-4. **Validator** - Ensure generated documents meet PP6 requirements
-5. **CLI Interface** - Accept input data and output .pro6 files
+The implemented Python modules include:
+1. **generate_pp6_doc.py** - Core document generator with:
+   - XML structure creation for individual .pro6 files
+   - Base64 encoding for all text formats (PlainText, RTFData, WinFlowData)
+   - UUID generation for all elements
+   - Media file path encoding
+   - CLI interface for creating documents
+
+2. **generate_pp6_playlist.py** - Playlist generator with:
+   - Complete playlist directory creation
+   - data.pro6pl playlist file generation
+   - Media file discovery and copying
+   - Cross-platform path handling (Windows/macOS)
+   - Document scanning for media references
+   - CLI interface for playlist creation
 
 ## Important Notes
 

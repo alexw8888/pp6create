@@ -41,6 +41,7 @@ class PP6PlaylistGenerator:
         self.playlist_path = Path(output_dir) if output_dir else None
         self.documents = []
         self.media_files = {}  # Maps source paths to destination paths
+        self.media_name_counter = {}  # Tracks usage count for each media filename
         self.os_type = 2 if platform.system() == "Darwin" else 1  # 2 for macOS, 1 for Windows
         self.temp_dir = None  # Will be set when creating playlist
         
@@ -105,7 +106,7 @@ class PP6PlaylistGenerator:
             return ""
     
     def calculate_media_destination(self, source_path: str) -> Path:
-        """Calculate where to copy media file in playlist structure"""
+        """Calculate where to copy media file in playlist structure, avoiding name conflicts"""
         source = Path(source_path)
         
         # For system media (ProgramData or Renewed Vision Media)
@@ -116,13 +117,45 @@ class PP6PlaylistGenerator:
             idx = source.parts.index('Renewed Vision Media')
             return Path('ProgramData', 'Renewed Vision Media', *source.parts[idx+1:])
         
-        # For user media, preserve the Users/username/... structure
+        # For user media, check for naming conflicts and rename if necessary
         if 'Users' in source.parts:
             idx = source.parts.index('Users')
-            return Path(*source.parts[idx:])
+            original_path = Path(*source.parts[idx:])
+            
+            # Check if this filename already exists
+            filename = source.name
+            if filename in self.media_name_counter:
+                # File with same name exists, create unique name using parent directory
+                parent_dir = source.parent.name
+                name_stem = source.stem
+                extension = source.suffix
+                unique_name = f"{name_stem}_{parent_dir}{extension}"
+                
+                # Update the path with unique name
+                new_parts = list(original_path.parts[:-1]) + [unique_name]
+                final_path = Path(*new_parts)
+                
+                self.media_name_counter[filename] += 1
+                print(f"Renamed media file {filename} to {unique_name} to avoid conflict")
+                return final_path
+            else:
+                # First occurrence of this filename
+                self.media_name_counter[filename] = 1
+                return original_path
         
-        # Fallback: put in a media subdirectory
-        return Path('Media') / source.name
+        # Fallback: put in a media subdirectory with conflict resolution
+        filename = source.name
+        if filename in self.media_name_counter:
+            parent_dir = source.parent.name
+            name_stem = source.stem
+            extension = source.suffix
+            unique_name = f"{name_stem}_{parent_dir}{extension}"
+            self.media_name_counter[filename] += 1
+            print(f"Renamed media file {filename} to {unique_name} to avoid conflict")
+            return Path('Media') / unique_name
+        else:
+            self.media_name_counter[filename] = 1
+            return Path('Media') / source.name
     
     def copy_media_file(self, source: str, relative_dest: Path):
         """Copy a media file to the playlist directory"""
@@ -139,6 +172,35 @@ class PP6PlaylistGenerator:
             self.media_files[str(source_path)] = relative_dest
         except Exception as e:
             print(f"Error copying media file {source}: {e}")
+    
+    def update_document_media_paths(self, doc_path: Path):
+        """Update media file paths in a PP6 document to use renamed files"""
+        try:
+            tree = ET.parse(doc_path)
+            root = tree.getroot()
+            
+            # Find all media elements and update their source paths
+            for elem in root.findall(".//RVImageElement") + root.findall(".//RVVideoElement"):
+                source = elem.get('source')
+                if source and source.startswith('file://'):
+                    # Extract the original file path
+                    original_path = source[7:]  # Remove file:// prefix
+                    
+                    # Check if this file was renamed during copying
+                    if original_path in self.media_files:
+                        # Update to use the new path in the playlist
+                        new_relative_path = self.media_files[original_path]
+                        if self.playlist_path:
+                            new_absolute_path = self.playlist_path / new_relative_path
+                            new_file_url = f"file://{new_absolute_path}"
+                            elem.set('source', new_file_url)
+                            print(f"Updated media reference: {Path(original_path).name} -> {new_relative_path.name}")
+            
+            # Write the updated document back
+            tree.write(doc_path, encoding='utf-8', xml_declaration=False)
+            
+        except Exception as e:
+            print(f"Error updating media paths in {doc_path}: {e}")
     
     def encode_path_for_platform(self, path: str) -> str:
         """Encode path based on platform"""
@@ -260,10 +322,12 @@ class PP6PlaylistGenerator:
         
         # Copy documents and scan for media
         all_media = set()
+        copied_docs = []
         for doc_info in self.documents:
             # Copy document to playlist
             dest_doc = self.playlist_path / doc_info['path'].name
             shutil.copy2(doc_info['path'], dest_doc)
+            copied_docs.append(dest_doc)
             
             # Scan for media references
             media_refs = self.scan_document_media(doc_info['path'])
@@ -275,6 +339,10 @@ class PP6PlaylistGenerator:
             if Path(media_path).exists():
                 dest = self.calculate_media_destination(media_path)
                 self.copy_media_file(media_path, dest)
+        
+        # Update document media paths to use renamed files
+        for doc_path in copied_docs:
+            self.update_document_media_paths(doc_path)
         
         # Generate and save playlist XML
         playlist_xml = self.generate_playlist_xml()

@@ -65,7 +65,8 @@ class PP6Generator:
             return "0 0 0 1"
     
     def encode_text(self, text: str, font_size: int = 114, font_bold: bool = True, 
-                    font_name: str = "PingFangSC-Semibold", simple_format: bool = False) -> str:
+                    font_name: str = "PingFangSC-Semibold", simple_format: bool = False,
+                    text_color: str = "#000000") -> str:
         """Encode text in RTF format matching ProPresenter 6 Mac format"""
         # Convert text to RTF with proper encoding for Chinese characters
         rtf_text = ""
@@ -84,16 +85,26 @@ class PP6Generator:
             else:
                 rtf_text += char
         
+        # Parse text color
+        if text_color.startswith('#'):
+            hex_color = text_color.lstrip('#')
+            r = int(hex_color[0:2], 16)
+            g = int(hex_color[2:4], 16) 
+            b = int(hex_color[4:6], 16)
+        else:
+            # Default to black
+            r, g, b = 0, 0, 0
+        
         if simple_format:
-            # Simple format like in gathering.pro6
+            # Simple format with custom text color
             rtf_template = r"""{\rtf1\ansi\ansicpg1252\cocoartf2822
 \cocoatextscaling0\cocoaplatform0{\fonttbl\f0\fnil\fcharset134 """ + font_name + r""";\f1\fswiss\fcharset0 Helvetica;}
-{\colortbl;\red255\green255\blue255;}
+{\colortbl;\red""" + str(r) + r"""\green""" + str(g) + r"""\blue""" + str(b) + r""";}
 {\*\expandedcolortbl;;}
 \deftab720
 \pard\pardeftab720\partightenfactor0
 
-\f0""" + (r"\b" if font_bold else "") + r"\fs" + str(font_size) + r" \cf0 " + rtf_text + r"""
+\f0""" + (r"\b" if font_bold else "") + r"\fs" + str(font_size) + r" \cf1 " + rtf_text + r"""
 \f1  }"""
         else:
             # Original format with outlines
@@ -112,9 +123,9 @@ class PP6Generator:
     def create_text_element(self, text: str, slide_uuid: str, position: str = None, 
                           font_size: int = 114, font_bold: bool = True, 
                           font_name: str = "PingFangSC-Semibold", simple_format: bool = False,
-                          vertical_alignment: str = "1") -> ET.Element:
+                          vertical_alignment: str = "1", text_color: str = "#000000") -> ET.Element:
         """Create an RVTextElement with properly encoded text"""
-        rtf_encoded = self.encode_text(text, font_size, font_bold, font_name, simple_format)
+        rtf_encoded = self.encode_text(text, font_size, font_bold, font_name, simple_format, text_color)
         element_uuid = self.generate_uuid()
         
         text_elem = ET.Element('RVTextElement', {
@@ -128,7 +139,7 @@ class PP6Generator:
             'drawingFill': 'false',
             'drawingShadow': 'false',
             'drawingStroke': 'false',
-            'fillColor': '0 0 0 0',
+            'fillColor': '1 1 1 1',
             'fromTemplate': 'false',
             'lineBackgroundType': '0',
             'lineFillVerticalOffset': '0.000000',
@@ -821,6 +832,7 @@ class PP6Generator:
                 vertical_alignment = config.get('verticalAlignment', '0')
                 label = config.get('label', base_name)
                 background_color = self.convert_color_to_rgba(config.get('backgroundColor', '0 0 0 1'))
+                text_color = config.get('color', '#000000')
                 
                 # Create slide data
                 slide_info = {
@@ -833,7 +845,8 @@ class PP6Generator:
                     'font_name': font_name,
                     'simple_format': simple_format,
                     'vertical_alignment': vertical_alignment,
-                    'background_color': background_color
+                    'background_color': background_color,
+                    'color': text_color
                 }
                 slides_data.append(slide_info)
             else:
@@ -946,11 +959,12 @@ class PP6Generator:
         """Create a slide from JSON configuration"""
         slide_uuid = self.generate_uuid()
         
+        background_color = config.get('background_color', '0 0 0 1')
         slide = ET.Element('RVDisplaySlide', {
             'UUID': slide_uuid,
-            'backgroundColor': config.get('background_color', '0 0 0 1'),
+            'backgroundColor': background_color,
             'chordChartPath': '',
-            'drawingBackgroundColor': 'false',
+            'drawingBackgroundColor': 'true' if background_color != '0 0 0 1' else 'false',
             'enabled': 'true',
             'highlightColor': '1 1 1 0',
             'hotKey': '',
@@ -979,7 +993,8 @@ class PP6Generator:
                 font_bold=config.get('font_bold', False),
                 font_name=config.get('font_name', 'PingFangSC-Regular'),
                 simple_format=config.get('simple_format', True),
-                vertical_alignment=config.get('vertical_alignment', '0')
+                vertical_alignment=config.get('vertical_alignment', '0'),
+                text_color=config.get('color', '#000000')
             )
             display_elements.append(text_element)
         

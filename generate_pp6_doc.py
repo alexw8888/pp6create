@@ -42,9 +42,22 @@ class PP6Generator:
     
     def encode_text(self, text: str) -> str:
         """Encode text in RTF format matching ProPresenter 6 Mac format"""
-        # RTF format for Mac ProPresenter 6
-        # Replace newlines with RTF line breaks
-        rtf_text = text.replace('\n', '\\\n')
+        # Convert text to RTF with proper encoding for Chinese characters
+        rtf_text = ""
+        for char in text:
+            if char == '\n':
+                rtf_text += '\\\n'
+            elif ord(char) > 127:
+                # Try to encode as GB2312 (Chinese encoding)
+                try:
+                    gb_bytes = char.encode('gb2312')
+                    rtf_text += ''.join([f"\\'{b:02x}" for b in gb_bytes])
+                except:
+                    # If not in GB2312, use Unicode encoding
+                    code = ord(char)
+                    rtf_text += f"\\u{code}?"
+            else:
+                rtf_text += char
         
         rtf_template = r"""{\rtf1\ansi\ansicpg1252\cocoartf2822
 \cocoatextscaling0\cocoaplatform0{\fonttbl\f0\fnil\fcharset134 PingFangSC-Semibold;}

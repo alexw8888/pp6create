@@ -41,6 +41,29 @@ class PP6Generator:
         """Generate a valid UUID4 in uppercase format"""
         return str(uuid.uuid4()).upper()
     
+    def convert_color_to_rgba(self, color: str) -> str:
+        """Convert color from hex or name to PP6 RGBA format"""
+        if color.startswith('#'):
+            # Convert hex to RGBA
+            hex_color = color.lstrip('#')
+            if len(hex_color) == 6:
+                r = int(hex_color[0:2], 16) / 255.0
+                g = int(hex_color[2:4], 16) / 255.0
+                b = int(hex_color[4:6], 16) / 255.0
+                return f"{r} {g} {b} 1"
+            elif len(hex_color) == 8:
+                r = int(hex_color[0:2], 16) / 255.0
+                g = int(hex_color[2:4], 16) / 255.0
+                b = int(hex_color[4:6], 16) / 255.0
+                a = int(hex_color[6:8], 16) / 255.0
+                return f"{r} {g} {b} {a}"
+        elif ' ' in color and len(color.split()) == 4:
+            # Already in RGBA format
+            return color
+        else:
+            # Default to black
+            return "0 0 0 1"
+    
     def encode_text(self, text: str, font_size: int = 114, font_bold: bool = True, 
                     font_name: str = "PingFangSC-Semibold", simple_format: bool = False) -> str:
         """Encode text in RTF format matching ProPresenter 6 Mac format"""
@@ -656,14 +679,27 @@ class PP6Generator:
         return root
     
     def generate_from_directory(self, source_dir: str, output_file: str):
-        """Generate PP6 document from all media and text files in a directory"""
+        """Generate PP6 document from directory using unified JSON/media processing rules"""
         source_path = Path(source_dir)
         
         if not source_path.exists():
             raise ValueError(f"Source directory {source_dir} does not exist")
         
-        # Collect all relevant files
-        text_files = list(source_path.glob('*.txt'))
+        # Check if directory has JSON files
+        json_files = list(source_path.glob('*.json'))
+        
+        if json_files:
+            # Use unified JSON/media processing
+            self.generate_from_unified_directory(source_dir, output_file)
+        else:
+            # Legacy processing for directories without JSON
+            self._generate_from_legacy_directory(source_dir, output_file)
+    
+    def _generate_from_legacy_directory(self, source_dir: str, output_file: str):
+        """Legacy processing for directories without JSON files"""
+        source_path = Path(source_dir)
+        
+        # Collect media files only (no text files in legacy mode)
         image_files = []
         video_files = []
         
@@ -676,38 +712,16 @@ class PP6Generator:
         
         # Combine all media files
         media_files = image_files + video_files
-        
-        # Sort all files by name
-        text_files.sort(key=lambda x: x.name)
         media_files.sort(key=lambda x: x.name)
         
-        # Create slides based on available content
+        # Create slides for media files
         slides_data = []
-        
-        # Strategy: pair text files with media files if counts match,
-        # otherwise create separate slides
-        if len(text_files) == len(media_files) and len(text_files) > 0:
-            # Pair each text with corresponding media
-            for text_file, media_file in zip(text_files, media_files):
-                with open(text_file, 'r', encoding='utf-8') as f:
-                    text_content = f.read().strip()
-                slides_data.append((text_content, str(media_file), ""))
-        else:
-            # Create separate slides for media and text
-            # First add media-only slides
-            for media_file in media_files:
-                label = media_file.stem  # filename without extension
-                slides_data.append((None, str(media_file), label))
-            
-            # Then add text-only slides
-            for text_file in text_files:
-                with open(text_file, 'r', encoding='utf-8') as f:
-                    text_content = f.read().strip()
-                    if text_content:
-                        slides_data.append((text_content, None, ""))
+        for media_file in media_files:
+            label = media_file.stem
+            slides_data.append((None, str(media_file), label))
         
         if not slides_data:
-            raise ValueError(f"No content files found in {source_dir}")
+            raise ValueError(f"No media files found in {source_dir}")
         
         # Generate title from directory name
         title = source_path.name.replace('_', ' ').title()
@@ -722,92 +736,130 @@ class PP6Generator:
             f.write(xml_content)
         
         print(f"Generated {output_file} with {len(slides_data)} slides from {source_dir}")
-        print(f"  - {len(text_files)} text files")
         print(f"  - {len(image_files)} image files")
         print(f"  - {len(video_files)} video files")
     
-    def generate_from_json_directory(self, source_dir: str, output_file: str):
-        """Generate PP6 document from JSON configurations and matching media files"""
+    def generate_from_unified_directory(self, source_dir: str, output_file: str):
+        """Generate PP6 document using unified JSON/media processing rules"""
         source_path = Path(source_dir)
         
-        if not source_path.exists():
-            raise ValueError(f"Source directory {source_dir} does not exist")
-        
-        # Find all JSON files
+        # Collect all files
         json_files = sorted(source_path.glob('*.json'), key=lambda x: x.name)
+        image_files = []
+        video_files = []
         
-        if not json_files:
-            # Fallback to regular generation if no JSON files
-            return self.generate_from_directory(source_dir, output_file)
+        # Collect image files
+        for ext in ['*.png', '*.jpg', '*.jpeg']:
+            image_files.extend(source_path.glob(ext))
         
-        # Create slides based on JSON configurations
+        # Collect video files
+        video_files.extend(source_path.glob('*.mp4'))
+        
+        # Combine all media files
+        all_media_files = sorted(image_files + video_files, key=lambda x: x.name)
+        
+        # Create a set of all unique base names
+        all_base_names = set()
+        for f in json_files:
+            all_base_names.add(f.stem)
+        for f in all_media_files:
+            all_base_names.add(f.stem)
+        
+        # Process each unique base name
         slides_data = []
-        
-        for json_file in json_files:
-            # Load JSON configuration
-            with open(json_file, 'r', encoding='utf-8') as f:
-                config = json.load(f)
+        for base_name in sorted(all_base_names):
+            # Check for JSON file
+            json_file = source_path / f"{base_name}.json"
+            has_json = json_file.exists()
             
-            # Look for matching media file
-            base_name = json_file.stem
+            # Check for media file
             media_file = None
-            
-            # Try different media extensions
             for ext in ['.png', '.jpg', '.jpeg', '.mp4']:
                 potential_media = source_path / f"{base_name}{ext}"
                 if potential_media.exists():
                     media_file = str(potential_media)
                     break
             
-            # Extract text and formatting options from JSON
-            text = config.get('text', '')
-            
-            # Handle position from x, y coordinates or direct position string
-            if 'x' in config and 'y' in config:
-                # Calculate position based on x, y coordinates
-                # For gathering.pro6 example: {231 653 0 374 55}
-                x = config.get('x', 231)
-                y = config.get('y', 653)
-                # Estimate width based on text length and font size
-                width = config.get('width', 374)
-                height = config.get('height', 55)
-                position = f"{{{x} {y} 0 {width} {height}}}"
+            if has_json:
+                # Load JSON configuration
+                with open(json_file, 'r', encoding='utf-8') as f:
+                    config = json.load(f)
+                
+                # Extract configuration
+                text = config.get('text', '')
+                
+                # Check if JSON specifies a media file
+                json_media = config.get('media')
+                if json_media:
+                    # Use the media file specified in JSON
+                    json_media_path = source_path / json_media
+                    if json_media_path.exists():
+                        media_file = str(json_media_path)
+                
+                # Handle position
+                if 'x' in config and 'y' in config:
+                    x = config.get('x', 231)
+                    y = config.get('y', 653)
+                    width = config.get('width', 374)
+                    height = config.get('height', 55)
+                    position = f"{{{x} {y} 0 {width} {height}}}"
+                else:
+                    position = config.get('position')
+                
+                font_size = config.get('fontSize', 59)
+                font_bold = config.get('fontBold', False)
+                font_name = config.get('fontName', 'PingFangSC-Regular')
+                
+                # Map font families
+                font_family = config.get('fontFamily', '').lower()
+                if font_family == 'arial':
+                    font_name = 'Arial'
+                elif font_family == 'helvetica':
+                    font_name = 'Helvetica'
+                
+                simple_format = config.get('simpleFormat', True)
+                vertical_alignment = config.get('verticalAlignment', '0')
+                label = config.get('label', base_name)
+                background_color = self.convert_color_to_rgba(config.get('backgroundColor', '0 0 0 1'))
+                
+                # Create slide data
+                slide_info = {
+                    'text': text,
+                    'background': media_file,  # Can be None
+                    'label': label,
+                    'position': position,
+                    'font_size': font_size,
+                    'font_bold': font_bold,
+                    'font_name': font_name,
+                    'simple_format': simple_format,
+                    'vertical_alignment': vertical_alignment,
+                    'background_color': background_color
+                }
+                slides_data.append(slide_info)
             else:
-                position = config.get('position')
-            
-            font_size = config.get('fontSize', 59)  # Default from gathering.pro6
-            font_bold = config.get('fontBold', False)
-            font_name = config.get('fontName', 'PingFangSC-Regular')
-            
-            # Map font families
-            font_family = config.get('fontFamily', '').lower()
-            if font_family == 'arial':
-                font_name = 'Arial'
-            elif font_family == 'helvetica':
-                font_name = 'Helvetica'
-            
-            simple_format = config.get('simpleFormat', True)
-            vertical_alignment = config.get('verticalAlignment', '0')
-            label = config.get('label', base_name)
-            
-            # Create slide data
-            slide_info = {
-                'text': text,
-                'background': media_file,
-                'label': label,
-                'position': position,
-                'font_size': font_size,
-                'font_bold': font_bold,
-                'font_name': font_name,
-                'simple_format': simple_format,
-                'vertical_alignment': vertical_alignment
-            }
-            slides_data.append(slide_info)
+                # No JSON - image only slide
+                if media_file:
+                    slide_info = {
+                        'text': '',
+                        'background': media_file,
+                        'label': base_name,
+                        'position': None,
+                        'font_size': 59,
+                        'font_bold': False,
+                        'font_name': 'PingFangSC-Regular',
+                        'simple_format': True,
+                        'vertical_alignment': '0',
+                        'background_color': '0 0 0 1'
+                    }
+                    slides_data.append(slide_info)
+        
+        if not slides_data:
+            raise ValueError(f"No content files found in {source_dir}")
         
         # Generate title from directory name
         title = source_path.name.replace('_', ' ').replace('-', ' ').title()
         
-        # Create document with JSON-based slides
+        # Create document with unified slides
         doc = self.create_json_document(title, slides_data)
         
         # Write to file
@@ -816,8 +868,13 @@ class PP6Generator:
         with open(output_file, 'w', encoding='utf-8') as f:
             f.write(xml_content)
         
-        print(f"Generated {output_file} with {len(slides_data)} slides from JSON configurations")
+        print(f"Generated {output_file} with {len(slides_data)} slides from {source_dir}")
         print(f"  - {len(json_files)} JSON configuration files")
+        print(f"  - {len(all_media_files)} media files")
+    
+    def generate_from_json_directory(self, source_dir: str, output_file: str):
+        """Redirect to unified directory processing"""
+        self.generate_from_unified_directory(source_dir, output_file)
     
     def create_json_document(self, title: str, slides_data: List[Dict]) -> ET.Element:
         """Create a ProPresenter 6 document from JSON-configured slides"""
@@ -891,7 +948,7 @@ class PP6Generator:
         
         slide = ET.Element('RVDisplaySlide', {
             'UUID': slide_uuid,
-            'backgroundColor': '0 0 0 1',
+            'backgroundColor': config.get('background_color', '0 0 0 1'),
             'chordChartPath': '',
             'drawingBackgroundColor': 'false',
             'enabled': 'true',

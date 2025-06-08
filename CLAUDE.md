@@ -14,11 +14,18 @@ The generator supports various source materials including images, text files, so
 
 - **Unified Presentation Generator** - Merged PowerPoint generation capability from separate project
 - **Multi-format support** - Single command can generate both PP6 and PowerPoint formats
+- **Unified JSON/Media Processing Rules** - Implemented consistent rules for both formats:
+  - JSON files must match media files by base name (e.g., slide1.json + slide1.png)
+  - JSON files can specify media via "media" field (overrides base name matching)
+  - Media files without JSON create image-only slides
+  - JSON files without media use backgroundColor for colored backgrounds
+  - Supports hex color conversion to PP6 RGBA format
 - Added JSON-based document generation for precise text positioning and formatting
 - Support for custom text placement, font size, and font family via JSON configuration
 - Fixed text visibility issues (transparent fill color, proper shadow settings)
 - Updated playlist generator to automatically detect and use JSON configurations
 - Added support for background media behavior settings
+- **Known Issue**: When playlists contain media files with identical names from different directories (e.g., "2.jpg" in multiple folders), ProPresenter may experience media cache conflicts during playlist loading, potentially displaying the wrong image file
 
 ## Recent Updates (2025-06-07)
 

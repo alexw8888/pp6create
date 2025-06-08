@@ -113,23 +113,26 @@ class PPTXGenerator:
         except Exception as e:
             print(f"Warning: Could not add text shadow: {e}")
     
-    def add_slide_with_background(self, background_path: str, text: str = None, 
+    def add_slide_with_background(self, background_path: str = None, text: str = None, 
                                  position: Dict = None, font_config: Dict = None,
-                                 text_align: str = 'center'):
-        """Add a slide with background image and optional text."""
+                                 text_align: str = 'center', background_color: str = '#000000'):
+        """Add a slide with background image/color and optional text."""
         # Use blank slide layout
         slide_layout = self.prs.slide_layouts[6]
         slide = self.prs.slides.add_slide(slide_layout)
         
-        # Add black background first
-        black_bg = slide.shapes.add_shape(
+        # Add background color first
+        bg_shape = slide.shapes.add_shape(
             MSO_SHAPE.RECTANGLE,
             Inches(0), Inches(0),
             self.prs.slide_width, self.prs.slide_height
         )
-        black_bg.fill.solid()
-        black_bg.fill.fore_color.rgb = RGBColor(0, 0, 0)
-        black_bg.line.color.rgb = RGBColor(0, 0, 0)
+        bg_shape.fill.solid()
+        
+        # Parse background color
+        bg_color_rgb = self._parse_color(background_color)
+        bg_shape.fill.fore_color.rgb = RGBColor(*bg_color_rgb)
+        bg_shape.line.color.rgb = RGBColor(*bg_color_rgb)
         
         # Load and add image with preserved aspect ratio
         if background_path and os.path.exists(background_path):
@@ -224,67 +227,106 @@ class PPTXGenerator:
         return slide
     
     def generate_from_json_directory(self, source_dir: str) -> Presentation:
-        """Generate PowerPoint from JSON configurations."""
+        """Generate PowerPoint using unified JSON/media processing rules."""
         source_path = Path(source_dir)
-        json_files = sorted(source_path.glob('*.json'), key=lambda x: x.name)
         
-        for json_file in json_files:
-            # Load JSON configuration
-            with open(json_file, 'r', encoding='utf-8') as f:
-                config = json.load(f)
+        # Collect all files
+        json_files = sorted(source_path.glob('*.json'), key=lambda x: x.name)
+        image_files = []
+        video_files = []
+        
+        # Collect image files
+        for ext in ['*.png', '*.jpg', '*.jpeg']:
+            image_files.extend(source_path.glob(ext))
+        
+        # Collect video files
+        video_files.extend(source_path.glob('*.mp4'))
+        
+        # Combine all media files
+        all_media_files = sorted(image_files + video_files, key=lambda x: x.name)
+        
+        # Create a set of all unique base names
+        all_base_names = set()
+        for f in json_files:
+            all_base_names.add(f.stem)
+        for f in all_media_files:
+            all_base_names.add(f.stem)
+        
+        # Process each unique base name
+        for base_name in sorted(all_base_names):
+            # Check for JSON file
+            json_file = source_path / f"{base_name}.json"
+            has_json = json_file.exists()
             
-            # Look for matching media file
-            base_name = json_file.stem
+            # Check for media file
             media_file = None
-            
-            # Try different media extensions
             for ext in ['.png', '.jpg', '.jpeg', '.mp4']:
                 potential_media = source_path / f"{base_name}{ext}"
                 if potential_media.exists():
                     media_file = str(potential_media)
                     break
             
-            # Extract configuration
-            text = config.get('text', '')
-            
-            # Calculate PowerPoint-specific position with offsets
-            position = None
-            if 'x' in config and 'y' in config:
-                x = config.get('x', 0)
-                y = config.get('y', 0)
+            if has_json:
+                # Load JSON configuration
+                with open(json_file, 'r', encoding='utf-8') as f:
+                    config = json.load(f)
                 
-                # Apply PowerPoint-specific offsets if provided
-                x += config.get('pptxXoffset', 0)
-                y += config.get('pptxYoffset', 0)
+                # Extract configuration
+                text = config.get('text', '')
                 
-                position = {
-                    'x': x,
-                    'y': y,
-                    'width': config.get('width', 400),
-                    'height': config.get('height', 100)
+                # Calculate PowerPoint-specific position with offsets
+                position = None
+                if 'x' in config and 'y' in config:
+                    x = config.get('x', 0)
+                    y = config.get('y', 0)
+                    
+                    # Apply PowerPoint-specific offsets if provided
+                    x += config.get('pptxXoffset', 0)
+                    y += config.get('pptxYoffset', 0)
+                    
+                    position = {
+                        'x': x,
+                        'y': y,
+                        'width': config.get('width', 400),
+                        'height': config.get('height', 100)
+                    }
+                
+                # Calculate font size using scale factor
+                base_font_size = config.get('fontSize', self.font_size)
+                pptx_font_scale = config.get('pptxFontScale', 1.0)
+                calculated_font_size = int(base_font_size * pptx_font_scale)
+                
+                font_config = {
+                    'font_size': calculated_font_size,
+                    'font_name': config.get('fontFamily', self.font_family),
+                    'font_color': config.get('color', f'0x{self.font_color[0]:02X}{self.font_color[1]:02X}{self.font_color[2]:02X}')
                 }
-            
-            # Calculate font size using scale factor
-            base_font_size = config.get('fontSize', self.font_size)
-            pptx_font_scale = config.get('pptxFontScale', 1.0)
-            calculated_font_size = int(base_font_size * pptx_font_scale)
-            
-            font_config = {
-                'font_size': calculated_font_size,
-                'font_name': config.get('fontFamily', self.font_family),
-                'font_color': config.get('color', f'0x{self.font_color[0]:02X}{self.font_color[1]:02X}{self.font_color[2]:02X}')
-            }
-            
-            # Add slide with left alignment for JSON-based slides
-            self.add_slide_with_background(media_file, text, position, font_config, text_align='left')
+                
+                # Get background color
+                background_color = config.get('backgroundColor', '#000000')
+                
+                # Add slide with left alignment for JSON-based slides
+                self.add_slide_with_background(media_file, text, position, font_config, 
+                                             text_align='left', background_color=background_color)
+            else:
+                # No JSON - image only slide
+                if media_file:
+                    self.add_slide_with_background(media_file)
         
         return self.prs
     
     def generate_from_directory(self, source_dir: str) -> Presentation:
-        """Generate PowerPoint from directory of images and text files."""
+        """Generate PowerPoint from directory using unified rules."""
         source_path = Path(source_dir)
         
-        # Get all files
+        # Check if directory has JSON files
+        json_files = list(source_path.glob('*.json'))
+        
+        if json_files:
+            # Use unified JSON/media processing
+            return self.generate_from_json_directory(source_dir)
+        
+        # Legacy processing - check for song files
         text_files = list(source_path.glob('*.txt'))
         image_files = []
         
@@ -309,7 +351,7 @@ class PPTXGenerator:
             # Process as song
             self._process_song_file(song_file, image_files[0] if image_files else None)
         else:
-            # Process images only
+            # Process images only (no text files allowed in non-song directories)
             for image_file in image_files:
                 self.add_slide_with_background(str(image_file))
         

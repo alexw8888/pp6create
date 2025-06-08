@@ -13,6 +13,7 @@ from pathlib import Path
 import platform
 import argparse
 import zipfile
+import tempfile
 from typing import List, Dict, Tuple
 from dotenv import load_dotenv
 from generate_pp6_doc import PP6Generator  # Import existing document generator
@@ -34,13 +35,14 @@ def is_song_file(filepath: str) -> bool:
 class PP6PlaylistGenerator:
     """Generator for ProPresenter 6 playlist directories"""
     
-    def __init__(self, playlist_name: str = "GeneratedPlaylist", output_dir: str = "generated_playlist"):
+    def __init__(self, playlist_name: str = "GeneratedPlaylist", output_dir: str = None):
         self.playlist_name = playlist_name
         self.output_dir = output_dir
-        self.playlist_path = Path(output_dir)
+        self.playlist_path = Path(output_dir) if output_dir else None
         self.documents = []
         self.media_files = {}  # Maps source paths to destination paths
         self.os_type = 2 if platform.system() == "Darwin" else 1  # 2 for macOS, 1 for Windows
+        self.temp_dir = None  # Will be set when creating playlist
         
     def add_document(self, doc_path: str, display_name: str = None):
         """Add a ProPresenter 6 document to the playlist"""
@@ -241,8 +243,13 @@ class PP6PlaylistGenerator:
         
         return root
     
-    def create_playlist(self, documents: List[str] = None):
+    def create_playlist(self, documents: List[str] = None, use_temp_dir: bool = False):
         """Create a complete PP6 playlist directory"""
+        # If using temp dir, create it
+        if use_temp_dir:
+            self.temp_dir = tempfile.mkdtemp(prefix="pp6playlist_")
+            self.playlist_path = Path(self.temp_dir) / self.playlist_name
+        
         # Create output directory
         self.playlist_path.mkdir(parents=True, exist_ok=True)
         
@@ -282,7 +289,10 @@ class PP6PlaylistGenerator:
             f.write(b'<?xml version="1.0" encoding="utf-8" standalone="yes"?>\n')
             tree.write(f, encoding='utf-8', xml_declaration=False)
         
-        print(f"Playlist created at: {self.playlist_path}")
+        if use_temp_dir:
+            print(f"Playlist created in temp directory: {self.playlist_path}")
+        else:
+            print(f"Playlist created at: {self.playlist_path}")
         print(f"- Documents: {len(self.documents)}")
         print(f"- Media files: {len(self.media_files)}")
     
@@ -302,10 +312,13 @@ class PP6PlaylistGenerator:
             if level and (not elem.tail or not elem.tail.strip()):
                 elem.tail = i
     
-    def create_pro6plx(self):
+    def create_pro6plx(self, output_path: str = None):
         """Create a .pro6plx file (zipped playlist directory)"""
         # Create the .pro6plx filename based on playlist name
-        pro6plx_file = f"{self.playlist_name}.pro6plx"
+        if output_path:
+            pro6plx_file = output_path
+        else:
+            pro6plx_file = f"{self.playlist_name}.pro6plx"
         
         # Create a zip file
         with zipfile.ZipFile(pro6plx_file, 'w', zipfile.ZIP_DEFLATED) as zipf:
@@ -318,26 +331,44 @@ class PP6PlaylistGenerator:
                     zipf.write(file_path, arcname)
         
         print(f"Created .pro6plx file: {pro6plx_file}")
+        
+        # Clean up temp directory if it was used
+        if self.temp_dir:
+            shutil.rmtree(self.temp_dir)
+            print(f"Cleaned up temporary directory")
+        
         return pro6plx_file
 
 
 def main():
     parser = argparse.ArgumentParser(description='Generate ProPresenter 6 playlists')
     parser.add_argument('--name', default='GeneratedPlaylist', help='Playlist name')
-    parser.add_argument('--output', default='generated_playlist', help='Output directory')
+    parser.add_argument('--output', help='Output directory (if not specified, uses temp directory)')
+    parser.add_argument('--pro6plx-only', action='store_true', 
+                       help='Only create .pro6plx file in current directory, use temp for all other files')
     parser.add_argument('--generate-docs', action='store_true', 
                        help='Generate sample documents from source_materials')
     parser.add_argument('documents', nargs='*', help='PP6 documents to include')
     
     args = parser.parse_args()
     
+    # Determine if we should use temp directory
+    use_temp = args.pro6plx_only or (not args.output)
+    
     # Create playlist generator
-    generator = PP6PlaylistGenerator(args.name, args.output)
+    generator = PP6PlaylistGenerator(args.name, args.output if not use_temp else None)
     
     # If no documents specified and no --generate-docs flag, automatically generate docs
     if not args.documents and not args.generate_docs:
         args.generate_docs = True
         print("No documents specified, automatically generating sample documents...")
+    
+    # Create temp directory for generated documents if using temp mode
+    if use_temp and args.generate_docs:
+        doc_temp_dir = tempfile.mkdtemp(prefix="pp6docs_")
+        print(f"Using temporary directory for generated documents: {doc_temp_dir}")
+    else:
+        doc_temp_dir = None
     
     # If --generate-docs flag is set, generate documents first
     if args.generate_docs:
@@ -352,7 +383,10 @@ def main():
             # Sort subdirectories to ensure consistent ordering
             subdirs = sorted([d for d in source_dir.iterdir() if d.is_dir()], key=lambda x: x.name)
             for subdir in subdirs:
-                    output_file = f"generated_{subdir.name}.pro6"
+                    if doc_temp_dir:
+                        output_file = Path(doc_temp_dir) / f"generated_{subdir.name}.pro6"
+                    else:
+                        output_file = f"generated_{subdir.name}.pro6"
                     
                     # Check if this directory contains a song file
                     txt_files = list(subdir.glob('*.txt'))
@@ -378,10 +412,10 @@ def main():
                         print(f"Generated song: {output_file}")
                     else:
                         # Generate as regular document
-                        doc_generator.generate_from_directory(str(subdir), output_file)
+                        doc_generator.generate_from_directory(str(subdir), str(output_file))
                         print(f"Generated document: {output_file}")
                     
-                    generated_docs.append(output_file)
+                    generated_docs.append(str(output_file))
         
         # Add generated documents to playlist
         for doc in generated_docs:
@@ -392,10 +426,16 @@ def main():
         generator.add_document(doc)
     
     # Create the playlist
-    generator.create_playlist()
+    generator.create_playlist(use_temp_dir=use_temp)
     
     # Create the .pro6plx file
-    generator.create_pro6plx()
+    pro6plx_path = f"{args.name}.pro6plx" if use_temp else None
+    generator.create_pro6plx(pro6plx_path)
+    
+    # Clean up document temp directory if used
+    if doc_temp_dir:
+        shutil.rmtree(doc_temp_dir)
+        print(f"Cleaned up temporary documents directory")
 
 
 if __name__ == "__main__":

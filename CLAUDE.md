@@ -13,6 +13,7 @@ This project is for creating a Python program to generate ProPresenter 6 (.pro6)
 - Fixed playlist XML structure to match ProPresenter 6 format exactly
 - Added .pro6plx (zipped playlist) generation
 - Environment variable support for PAGE_BREAK_EVERY (lines per slide)
+- Added --pro6plx-only flag to create only .pro6plx file with temp directories
 
 ## Key Components
 
@@ -61,11 +62,17 @@ python generate_pp6_doc.py --type song --source source_materials/3/song2.txt --o
 # Generate a PP6 playlist with automatic document generation
 python generate_pp6_playlist.py
 
+# Generate only .pro6plx file (uses temp directories for all other files)
+python generate_pp6_playlist.py --pro6plx-only
+
 # Generate a playlist with specific name
 python generate_pp6_playlist.py --name "Sunday Service"
 
 # Generate a playlist from existing documents
 python generate_pp6_playlist.py doc1.pro6 doc2.pro6 doc3.pro6
+
+# Generate playlist directory structure (old behavior)
+python generate_pp6_playlist.py --output my_playlist_dir
 
 # Validate XML output
 xmllint --noout generated.pro6
@@ -90,6 +97,7 @@ The implemented Python modules include:
    - Document scanning for media references
    - .pro6plx (zipped playlist) creation
    - CLI interface for playlist creation
+   - --pro6plx-only mode for creating only the .pro6plx file with automatic temp directory cleanup
 
 ## Song Document Features
 

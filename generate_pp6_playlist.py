@@ -88,6 +88,20 @@ class PP6PlaylistGenerator:
             
         return media_refs
     
+    def get_arrangement_uuid(self, doc_path: Path) -> str:
+        """Extract the selectedArrangementID from a PP6 document"""
+        try:
+            tree = ET.parse(doc_path)
+            root = tree.getroot()
+            
+            # Get the selectedArrangementID attribute from the root element
+            arrangement_id = root.get('selectedArrangementID', '')
+            return arrangement_id
+            
+        except Exception as e:
+            print(f"Error extracting arrangement UUID from {doc_path}: {e}")
+            return ""
+    
     def calculate_media_destination(self, source_path: str) -> Path:
         """Calculate where to copy media file in playlist structure"""
         source = Path(source_path)
@@ -205,7 +219,10 @@ class PP6PlaylistGenerator:
             doc_filename = doc['path'].name
             doc_path = f"~/Documents/ProPresenter6/{doc_filename}"
             doc_cue.set("filePath", doc_path)
-            doc_cue.set("selectedArrangementID", "")
+            
+            # Get and set the arrangement UUID for songs
+            arrangement_uuid = self.get_arrangement_uuid(doc['path'])
+            doc_cue.set("selectedArrangementID", arrangement_uuid)
         
         # Add empty events array
         events = ET.SubElement(playlist_node, "array")

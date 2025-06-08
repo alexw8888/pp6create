@@ -192,7 +192,7 @@ class PP6Generator:
                 'playbackBehavior': '1',
                 'rotation': '0.000000',
                 'rvXMLIvarName': 'element',
-                'scaleBehavior': '3',
+                'scaleBehavior': '0',
                 'scaleSize': '{1, 1}',
                 'source': file_url,
                 'timeScale': '1000',
@@ -222,7 +222,7 @@ class PP6Generator:
                 'persistent': 'false',
                 'rotation': '0.000000',
                 'rvXMLIvarName': 'element',
-                'scaleBehavior': '3',
+                'scaleBehavior': '0',
                 'scaleSize': '{1, 1}',
                 'source': file_url,
                 'typeID': '0'

@@ -332,8 +332,9 @@ def main():
         generated_docs = []
         
         if source_dir.exists():
-            for subdir in source_dir.iterdir():
-                if subdir.is_dir():
+            # Sort subdirectories to ensure consistent ordering
+            subdirs = sorted([d for d in source_dir.iterdir() if d.is_dir()], key=lambda x: x.name)
+            for subdir in subdirs:
                     output_file = f"generated_{subdir.name}.pro6"
                     
                     # Check if this directory contains a song file

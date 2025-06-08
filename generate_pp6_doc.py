@@ -470,6 +470,21 @@ class PP6Generator:
         # Get lines per slide from environment or use default
         if lines_per_slide is None:
             lines_per_slide = int(os.getenv('PAGE_BREAK_EVERY', '4'))
+        
+        # Check for media files in the same directory
+        song_dir = Path(song_file_path).parent
+        media_files = []
+        
+        # Collect all image files
+        for ext in ['.png', '.jpg', '.jpeg']:
+            media_files.extend(song_dir.glob(f'*{ext}'))
+        
+        # Collect all video files
+        media_files.extend(song_dir.glob('*.mp4'))
+        
+        # Sort media files by name
+        media_files.sort(key=lambda x: x.name)
+        
         # Parse the song file
         sections, arrangement = self.parse_song_file(song_file_path)
         
@@ -530,6 +545,7 @@ class PP6Generator:
         
         # Track group UUIDs for arrangement
         section_to_group_uuid = {}
+        media_group_uuid = None  # Track media group UUID separately
         
         # Create a group for each unique section
         for section_name in unique_sections:
@@ -573,6 +589,23 @@ class PP6Generator:
                 slide, slide_uuid = self.create_slide(slide_text, None, slide_label)
                 slides_array.append(slide)
         
+        # Add media files as separate slides if found
+        if media_files:
+            media_group_uuid = self.generate_uuid()
+            media_group = ET.SubElement(groups_array, 'RVSlideGrouping', {
+                'color': self.section_colors['default'],
+                'name': 'Media',
+                'uuid': media_group_uuid
+            })
+            
+            media_slides_array = ET.SubElement(media_group, 'array', {'rvXMLIvarName': 'slides'})
+            
+            # Create a slide for each media file
+            for media_file in media_files:
+                media_label = media_file.stem
+                media_slide, media_slide_uuid = self.create_slide(None, str(media_file), media_label)
+                media_slides_array.append(media_slide)
+        
         # Arrangements array
         arrangements_array = ET.SubElement(root, 'array', {'rvXMLIvarName': 'arrangements'})
         
@@ -587,6 +620,11 @@ class PP6Generator:
             
             # Add group IDs array
             group_ids_array = ET.SubElement(song_arrangement, 'array', {'rvXMLIvarName': 'groupIDs'})
+            
+            # Add media group at the beginning if it exists
+            if media_group_uuid:
+                ns_string = ET.SubElement(group_ids_array, 'NSString')
+                ns_string.text = media_group_uuid
             
             # Add group IDs in arrangement order
             for section in arrangement:

@@ -34,7 +34,7 @@ def is_song_file(filepath: str) -> bool:
 class PP6PlaylistGenerator:
     """Generator for ProPresenter 6 playlist directories"""
     
-    def __init__(self, playlist_name: str = "MyPlaylist", output_dir: str = "generated_playlist"):
+    def __init__(self, playlist_name: str = "GeneratedPlaylist", output_dir: str = "generated_playlist"):
         self.playlist_name = playlist_name
         self.output_dir = output_dir
         self.playlist_path = Path(output_dir)
@@ -323,7 +323,7 @@ class PP6PlaylistGenerator:
 
 def main():
     parser = argparse.ArgumentParser(description='Generate ProPresenter 6 playlists')
-    parser.add_argument('--name', default='MyPlaylist', help='Playlist name')
+    parser.add_argument('--name', default='GeneratedPlaylist', help='Playlist name')
     parser.add_argument('--output', default='generated_playlist', help='Output directory')
     parser.add_argument('--generate-docs', action='store_true', 
                        help='Generate sample documents from source_materials')

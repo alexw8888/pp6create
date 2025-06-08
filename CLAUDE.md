@@ -6,6 +6,14 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 This project is for creating a Python program to generate ProPresenter 6 (.pro6) documents and playlist directories programmatically. ProPresenter 6 is presentation software used primarily for worship services and events.
 
+## Recent Updates (2025-06-08)
+
+- Added JSON-based document generation for precise text positioning and formatting
+- Support for custom text placement, font size, and font family via JSON configuration
+- Fixed text visibility issues (transparent fill color, proper shadow settings)
+- Updated playlist generator to automatically detect and use JSON configurations
+- Added support for background media behavior settings
+
 ## Recent Updates (2025-06-07)
 
 - Added song document generation with section arrangements
@@ -59,6 +67,9 @@ python generate_pp6_doc.py --source source_materials/1 --output presentation.pro
 # Generate a song document with arrangements
 python generate_pp6_doc.py --type song --source source_materials/3/song2.txt --output song.pro6
 
+# Generate a document with JSON-based text positioning (automatic when JSON files present)
+python generate_pp6_doc.py --source source_materials/8-gathering --output gathering.pro6
+
 # Generate a PP6 playlist with automatic document generation
 python generate_pp6_playlist.py
 
@@ -111,6 +122,27 @@ The generator will:
 - Split sections into multiple slides based on PAGE_BREAK_EVERY environment variable
 - Generate an RVSongArrangement element with the specified section order
 - Set proper UUIDs for arrangement playback
+
+## JSON-Based Document Features
+
+For precise text positioning and custom formatting, create JSON configuration files alongside media files:
+
+```json
+{
+    "text": "日期: 7/6, 18/7",
+    "x": 231,
+    "y": 653,
+    "fontSize": 59,
+    "fontFamily": "Arial",
+    "media": "slide1.png"
+}
+```
+
+The generator automatically detects JSON files and:
+- Positions text at exact coordinates
+- Uses specified font family and size
+- Creates slides with transparent text overlays
+- Matches ProPresenter 6's text rendering format
 
 ## Important Notes
 

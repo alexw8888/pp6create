@@ -1,0 +1,35 @@
+RTF ENCODING COMPARISON BETWEEN GENERATED AND ORIGINAL FILES
+
+KEY DIFFERENCES THAT MAY AFFECT TEXT VISIBILITY:
+
+1. FILLCOLOR ATTRIBUTE IN RVTEXTELEMENT:
+   - Generated: fillColor="0 0 0 1" (BLACK - text will be invisible on black background!)
+   - Original: fillColor="0 0 0 0" (TRANSPARENT - correct for text overlay)
+
+2. FONT DIFFERENCES IN RTF:
+   - Generated: Uses "Arial" font with charset134
+   - Original: Uses "PingFangSC-Regular" font with charset134
+   
+3. FONT SIZE IN RTF:
+   - Generated: \fs24 (24 point)
+   - Original: \fs59 (59 point)
+
+4. TEXT POSITION:
+   - Generated: {100 100 0 374 55} (x=100, y=100)
+   - Original: {231 653 0 374 55} (x=231, y=653)
+
+5. BACKGROUND IMAGE BEHAVIOR:
+   - Generated: behavior="1" (may affect image display)
+   - Original: behavior="2"
+
+6. BACKGROUND IMAGE ENABLED:
+   - Generated: enabled="false" (background image disabled!)
+   - Original: enabled="true"
+
+CRITICAL ISSUES:
+1. The fillColor="0 0 0 1" makes the text BLACK on a BLACK background - text will be invisible!
+2. The background image is disabled in the generated file
+3. Font size is much smaller (24pt vs 59pt)
+
+SOLUTION:
+The main issue is the fillColor. It should be "0 0 0 0" (transparent) not "0 0 0 1" (black).

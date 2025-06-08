@@ -411,9 +411,16 @@ def main():
                         
                         print(f"Generated song: {output_file}")
                     else:
-                        # Generate as regular document
-                        doc_generator.generate_from_directory(str(subdir), str(output_file))
-                        print(f"Generated document: {output_file}")
+                        # Check if directory has JSON files
+                        json_files = list(subdir.glob('*.json'))
+                        if json_files:
+                            # Generate from JSON configurations
+                            doc_generator.generate_from_json_directory(str(subdir), str(output_file))
+                            print(f"Generated document from JSON: {output_file}")
+                        else:
+                            # Generate as regular document
+                            doc_generator.generate_from_directory(str(subdir), str(output_file))
+                            print(f"Generated document: {output_file}")
                     
                     generated_docs.append(str(output_file))
         

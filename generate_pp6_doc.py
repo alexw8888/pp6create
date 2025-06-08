@@ -11,6 +11,7 @@ import xml.etree.ElementTree as ET
 from pathlib import Path
 from typing import List, Dict, Tuple, Union, Optional
 import re
+import json
 from dotenv import load_dotenv
 
 # Load environment variables
@@ -40,7 +41,8 @@ class PP6Generator:
         """Generate a valid UUID4 in uppercase format"""
         return str(uuid.uuid4()).upper()
     
-    def encode_text(self, text: str) -> str:
+    def encode_text(self, text: str, font_size: int = 114, font_bold: bool = True, 
+                    font_name: str = "PingFangSC-Semibold", simple_format: bool = False) -> str:
         """Encode text in RTF format matching ProPresenter 6 Mac format"""
         # Convert text to RTF with proper encoding for Chinese characters
         rtf_text = ""
@@ -59,21 +61,37 @@ class PP6Generator:
             else:
                 rtf_text += char
         
-        rtf_template = r"""{\rtf1\ansi\ansicpg1252\cocoartf2822
-\cocoatextscaling0\cocoaplatform0{\fonttbl\f0\fnil\fcharset134 PingFangSC-Semibold;}
+        if simple_format:
+            # Simple format like in gathering.pro6
+            rtf_template = r"""{\rtf1\ansi\ansicpg1252\cocoartf2822
+\cocoatextscaling0\cocoaplatform0{\fonttbl\f0\fnil\fcharset134 """ + font_name + r""";\f1\fswiss\fcharset0 Helvetica;}
+{\colortbl;\red255\green255\blue255;}
+{\*\expandedcolortbl;;}
+\deftab720
+\pard\pardeftab720\partightenfactor0
+
+\f0""" + (r"\b" if font_bold else "") + r"\fs" + str(font_size) + r" \cf0 " + rtf_text + r"""
+\f1  }"""
+        else:
+            # Original format with outlines
+            rtf_template = r"""{\rtf1\ansi\ansicpg1252\cocoartf2822
+\cocoatextscaling0\cocoaplatform0{\fonttbl\f0\fnil\fcharset134 """ + font_name + r""";}
 {\colortbl;\red255\green255\blue255;\red255\green255\blue255;\red0\green0\blue0;}
 {\*\expandedcolortbl;;\csgray\c100000;\cssrgb\c0\c0\c0;}
 \pard\pardirnatural\qc\partightenfactor0
 
-\f0\b\fs114 \cf2 \kerning1\expnd8\expndtw40
+\f0""" + (r"\b" if font_bold else "") + r"\fs" + str(font_size) + r""" \cf2 \kerning1\expnd8\expndtw40
 \outl0\strokewidth-40 \strokec3 """ + rtf_text + r"""
 }"""
         rtf_b64 = base64.b64encode(rtf_template.encode('utf-8')).decode('ascii')
         return rtf_b64
     
-    def create_text_element(self, text: str, slide_uuid: str, position: str = None) -> ET.Element:
+    def create_text_element(self, text: str, slide_uuid: str, position: str = None, 
+                          font_size: int = 114, font_bold: bool = True, 
+                          font_name: str = "PingFangSC-Semibold", simple_format: bool = False,
+                          vertical_alignment: str = "1") -> ET.Element:
         """Create an RVTextElement with properly encoded text"""
-        rtf_encoded = self.encode_text(text)
+        rtf_encoded = self.encode_text(text, font_size, font_bold, font_name, simple_format)
         element_uuid = self.generate_uuid()
         
         text_elem = ET.Element('RVTextElement', {
@@ -87,8 +105,8 @@ class PP6Generator:
             'drawingFill': 'false',
             'drawingShadow': 'false',
             'drawingStroke': 'false',
-            'fillColor': '0 0 0 1',
-            'fromTemplate': 'true',
+            'fillColor': '0 0 0 0',
+            'fromTemplate': 'false',
             'lineBackgroundType': '0',
             'lineFillVerticalOffset': '0.000000',
             'locked': 'false',
@@ -100,7 +118,7 @@ class PP6Generator:
             'textSourceRemoveLineReturnsOption': 'false',
             'typeID': '0',
             'useAllCaps': 'false',
-            'verticalAlignment': '1'
+            'verticalAlignment': vertical_alignment
         })
         
         # Position - centered text area by default
@@ -113,17 +131,17 @@ class PP6Generator:
         
         # Shadow
         shadow = ET.SubElement(text_elem, 'shadow', {'rvXMLIvarName': 'shadow'})
-        shadow.text = '0.000000|0 0 0 0.3333333432674408|{3.9999997911970171, -3.999999397539229}'
+        shadow.text = '0.000000|0 0 0 0.3294117748737335|{4, -4}'
         
         # Stroke
         stroke = ET.SubElement(text_elem, 'dictionary', {'rvXMLIvarName': 'stroke'})
         stroke_color = ET.SubElement(stroke, 'NSColor', {'rvXMLDictionaryKey': 'RVShapeElementStrokeColorKey'})
         stroke_color.text = '0 0 0 1'
         stroke_width = ET.SubElement(stroke, 'NSNumber', {
-            'hint': 'float',
+            'hint': 'double',
             'rvXMLDictionaryKey': 'RVShapeElementStrokeWidthKey'
         })
-        stroke_width.text = '1.000000'
+        stroke_width.text = '0.000000'
         
         # Only RTF Data
         rtf_data = ET.SubElement(text_elem, 'NSString', {'rvXMLIvarName': 'RTFData'})
@@ -149,12 +167,12 @@ class PP6Generator:
             'UUID': cue_uuid,
             'actionType': '0',
             'alignment': '4',
-            'behavior': '1' if not is_video else '2',  # 2 for loop video
+            'behavior': '2',  # 2 for both images and videos in gathering.pro6
             'dateAdded': '',
             'delayTime': '0.000000',
             'displayName': Path(media_path).stem,
-            'enabled': 'false',
-            'nextCueUUID': '',
+            'enabled': 'true',
+            'nextCueUUID': '00000000-0000-0000-0000-000000000000',
             'rvXMLIvarName': 'backgroundMediaCue',
             'tags': '',
             'timeStamp': '0.000000'
@@ -262,7 +280,7 @@ class PP6Generator:
             'chordChartPath': '',
             'drawingBackgroundColor': 'false',
             'enabled': 'true',
-            'highlightColor': '0 0 0 0',
+            'highlightColor': '1 1 1 0',
             'hotKey': '',
             'label': label,
             'notes': '',
@@ -707,6 +725,208 @@ class PP6Generator:
         print(f"  - {len(text_files)} text files")
         print(f"  - {len(image_files)} image files")
         print(f"  - {len(video_files)} video files")
+    
+    def generate_from_json_directory(self, source_dir: str, output_file: str):
+        """Generate PP6 document from JSON configurations and matching media files"""
+        source_path = Path(source_dir)
+        
+        if not source_path.exists():
+            raise ValueError(f"Source directory {source_dir} does not exist")
+        
+        # Find all JSON files
+        json_files = sorted(source_path.glob('*.json'), key=lambda x: x.name)
+        
+        if not json_files:
+            # Fallback to regular generation if no JSON files
+            return self.generate_from_directory(source_dir, output_file)
+        
+        # Create slides based on JSON configurations
+        slides_data = []
+        
+        for json_file in json_files:
+            # Load JSON configuration
+            with open(json_file, 'r', encoding='utf-8') as f:
+                config = json.load(f)
+            
+            # Look for matching media file
+            base_name = json_file.stem
+            media_file = None
+            
+            # Try different media extensions
+            for ext in ['.png', '.jpg', '.jpeg', '.mp4']:
+                potential_media = source_path / f"{base_name}{ext}"
+                if potential_media.exists():
+                    media_file = str(potential_media)
+                    break
+            
+            # Extract text and formatting options from JSON
+            text = config.get('text', '')
+            
+            # Handle position from x, y coordinates or direct position string
+            if 'x' in config and 'y' in config:
+                # Calculate position based on x, y coordinates
+                # For gathering.pro6 example: {231 653 0 374 55}
+                x = config.get('x', 231)
+                y = config.get('y', 653)
+                # Estimate width based on text length and font size
+                width = config.get('width', 374)
+                height = config.get('height', 55)
+                position = f"{{{x} {y} 0 {width} {height}}}"
+            else:
+                position = config.get('position')
+            
+            font_size = config.get('fontSize', 59)  # Default from gathering.pro6
+            font_bold = config.get('fontBold', False)
+            font_name = config.get('fontName', 'PingFangSC-Regular')
+            
+            # Map font families
+            font_family = config.get('fontFamily', '').lower()
+            if font_family == 'arial':
+                font_name = 'Arial'
+            elif font_family == 'helvetica':
+                font_name = 'Helvetica'
+            
+            simple_format = config.get('simpleFormat', True)
+            vertical_alignment = config.get('verticalAlignment', '0')
+            label = config.get('label', base_name)
+            
+            # Create slide data
+            slide_info = {
+                'text': text,
+                'background': media_file,
+                'label': label,
+                'position': position,
+                'font_size': font_size,
+                'font_bold': font_bold,
+                'font_name': font_name,
+                'simple_format': simple_format,
+                'vertical_alignment': vertical_alignment
+            }
+            slides_data.append(slide_info)
+        
+        # Generate title from directory name
+        title = source_path.name.replace('_', ' ').replace('-', ' ').title()
+        
+        # Create document with JSON-based slides
+        doc = self.create_json_document(title, slides_data)
+        
+        # Write to file
+        xml_content = self.format_xml(doc)
+        
+        with open(output_file, 'w', encoding='utf-8') as f:
+            f.write(xml_content)
+        
+        print(f"Generated {output_file} with {len(slides_data)} slides from JSON configurations")
+        print(f"  - {len(json_files)} JSON configuration files")
+    
+    def create_json_document(self, title: str, slides_data: List[Dict]) -> ET.Element:
+        """Create a ProPresenter 6 document from JSON-configured slides"""
+        doc_uuid = self.generate_uuid()
+        
+        # Root element
+        root = ET.Element('RVPresentationDocument', {
+            'CCLIArtistCredits': '',
+            'CCLIAuthor': '',
+            'CCLICopyrightYear': '',
+            'CCLIDisplay': 'false',
+            'CCLIPublisher': '',
+            'CCLISongNumber': '',
+            'CCLISongTitle': title,
+            'backgroundColor': '0 0 0 0',
+            'buildNumber': self.build_number,
+            'category': 'Presentation',
+            'chordChartPath': '',
+            'docType': '0',
+            'drawingBackgroundColor': 'false',
+            'height': str(self.height),
+            'lastDateUsed': '',
+            'notes': '',
+            'os': '2',
+            'resourcesDirectory': '',
+            'selectedArrangementID': '',
+            'usedCount': '0',
+            'uuid': doc_uuid,
+            'versionNumber': self.version_number,
+            'width': str(self.width)
+        })
+        
+        # Timeline
+        timeline = ET.SubElement(root, 'RVTimeline', {
+            'duration': '0.000000',
+            'loop': 'false',
+            'playBackRate': '1.000000',
+            'rvXMLIvarName': 'timeline',
+            'selectedMediaTrackIndex': '-1',
+            'timeOffset': '0.000000'
+        })
+        ET.SubElement(timeline, 'array', {'rvXMLIvarName': 'timeCues'})
+        ET.SubElement(timeline, 'array', {'rvXMLIvarName': 'mediaTracks'})
+        
+        # Groups array
+        groups_array = ET.SubElement(root, 'array', {'rvXMLIvarName': 'groups'})
+        
+        # Create a single group for all slides
+        group_uuid = self.generate_uuid()
+        group = ET.SubElement(groups_array, 'RVSlideGrouping', {
+            'color': '0.2627451121807098 0.2627451121807098 0.2627451121807098 1',
+            'name': 'Group',
+            'uuid': group_uuid
+        })
+        
+        slides_array = ET.SubElement(group, 'array', {'rvXMLIvarName': 'slides'})
+        
+        # Add slides with JSON configuration
+        for slide_config in slides_data:
+            slide, slide_uuid = self.create_json_slide(slide_config)
+            slides_array.append(slide)
+        
+        # Arrangements array (empty)
+        ET.SubElement(root, 'array', {'rvXMLIvarName': 'arrangements'})
+        
+        return root
+    
+    def create_json_slide(self, config: Dict) -> Tuple[ET.Element, str]:
+        """Create a slide from JSON configuration"""
+        slide_uuid = self.generate_uuid()
+        
+        slide = ET.Element('RVDisplaySlide', {
+            'UUID': slide_uuid,
+            'backgroundColor': '0 0 0 1',
+            'chordChartPath': '',
+            'drawingBackgroundColor': 'false',
+            'enabled': 'true',
+            'highlightColor': '1 1 1 0',
+            'hotKey': '',
+            'label': config.get('label', ''),
+            'notes': '',
+            'socialItemCount': '1' if config.get('text') else '0'
+        })
+        
+        # Empty cues array
+        ET.SubElement(slide, 'array', {'rvXMLIvarName': 'cues'})
+        
+        # Add background media if provided
+        if config.get('background') and os.path.exists(config['background']):
+            bg_cue = self.create_background_media_cue(config['background'])
+            slide.insert(1, bg_cue)
+        
+        # Display elements array with text
+        display_elements = ET.SubElement(slide, 'array', {'rvXMLIvarName': 'displayElements'})
+        
+        if config.get('text'):
+            text_element = self.create_text_element(
+                text=config['text'],
+                slide_uuid=slide_uuid,
+                position=config.get('position'),
+                font_size=config.get('font_size', 59),
+                font_bold=config.get('font_bold', False),
+                font_name=config.get('font_name', 'PingFangSC-Regular'),
+                simple_format=config.get('simple_format', True),
+                vertical_alignment=config.get('vertical_alignment', '0')
+            )
+            display_elements.append(text_element)
+        
+        return slide, slide_uuid
 
 
 def main():
@@ -752,7 +972,12 @@ def main():
         output_file = args.output or "generated_doc1.pro6"
         
         try:
-            generator.generate_from_directory(source_dir, output_file)
+            # Check if directory contains JSON files
+            source_path = Path(source_dir)
+            if source_path.exists() and list(source_path.glob('*.json')):
+                generator.generate_from_json_directory(source_dir, output_file)
+            else:
+                generator.generate_from_directory(source_dir, output_file)
             
         except Exception as e:
             print(f"Error generating document: {e}")

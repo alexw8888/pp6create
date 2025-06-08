@@ -4,10 +4,16 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-This project is for creating a Python program to generate ProPresenter 6 (.pro6) documents and playlist directories programmatically. ProPresenter 6 is presentation software used primarily for worship services and events.
+This project is a unified presentation generator that creates presentations in multiple formats:
+- **ProPresenter 6** (.pro6) - XML-based presentation format for worship services and events
+- **PowerPoint** (.pptx) - Standard Microsoft PowerPoint presentations
+
+The generator supports various source materials including images, text files, songs with arrangements, and JSON-based configurations for precise control.
 
 ## Recent Updates (2025-06-08)
 
+- **Unified Presentation Generator** - Merged PowerPoint generation capability from separate project
+- **Multi-format support** - Single command can generate both PP6 and PowerPoint formats
 - Added JSON-based document generation for precise text positioning and formatting
 - Support for custom text placement, font size, and font family via JSON configuration
 - Fixed text visibility issues (transparent fill color, proper shadow settings)
@@ -60,6 +66,31 @@ This project is for creating a Python program to generate ProPresenter 6 (.pro6)
 - Standard resolution: 1024×768 or 1920×1080
 
 ### Common Commands
+
+#### Unified Presentation Generator (NEW)
+```bash
+# Generate complete presentation from all subdirectories (default behavior)
+python generate_presentation.py
+# Creates: GeneratedPlaylist.pro6plx and GeneratedPresentation.pptx
+
+# Generate ProPresenter 6 document from specific directory
+python generate_presentation.py --source source_materials/1 --format pro6
+
+# Generate PowerPoint presentation from specific directory
+python generate_presentation.py --source source_materials/1 --format pptx
+
+# Generate both formats at once (default format)
+python generate_presentation.py --source source_materials/1
+
+# Generate with custom output name
+python generate_presentation.py --output "SundayService"
+# Creates: SundayService.pro6plx and SundayService.pptx
+
+# Generate with custom dimensions and font size
+python generate_presentation.py --source source_materials/3 --width 1920 --height 1080 --font-size 48
+```
+
+#### ProPresenter 6 Specific Commands
 ```bash
 # Generate a single PP6 document (regular presentation)
 python generate_pp6_doc.py --source source_materials/1 --output presentation.pro6
@@ -92,14 +123,23 @@ xmllint --noout generated.pro6
 ## Architecture Considerations
 
 The implemented Python modules include:
-1. **generate_pp6_doc.py** - Core document generator with:
+
+1. **generate_presentation.py** - Unified presentation generator (NEW):
+   - Single entry point for all presentation formats
+   - Supports ProPresenter 6 (.pro6) and PowerPoint (.pptx) outputs
+   - Can generate both formats in a single command
+   - Automatically detects content type (songs, JSON configs, regular slides)
+   - Consistent command-line interface across formats
+
+2. **generate_pp6_doc.py** - ProPresenter 6 document generator:
    - XML structure creation for individual .pro6 files
    - Base64 encoding for all text formats (PlainText, RTFData, WinFlowData)
    - UUID generation for all elements
    - Media file path encoding
+   - JSON-based positioning support
    - CLI interface for creating documents
 
-2. **generate_pp6_playlist.py** - Playlist generator with:
+3. **generate_pp6_playlist.py** - ProPresenter 6 playlist generator:
    - Complete playlist directory creation
    - data.pro6pl playlist file generation with proper XML structure
    - Automatic song detection (looks for "Arrangement" line)
@@ -109,6 +149,14 @@ The implemented Python modules include:
    - .pro6plx (zipped playlist) creation
    - CLI interface for playlist creation
    - --pro6plx-only mode for creating only the .pro6plx file with automatic temp directory cleanup
+
+4. **pptx_generator.py** - PowerPoint generator (NEW):
+   - Creates .pptx files using python-pptx library
+   - Supports text shadows and custom fonts
+   - Preserves image aspect ratios
+   - JSON-based positioning support
+   - Compatible with song arrangements
+   - Environment variable configuration support
 
 ## Song Document Features
 
@@ -132,7 +180,10 @@ For precise text positioning and custom formatting, create JSON configuration fi
     "text": "日期: 7/6, 18/7",
     "x": 231,
     "y": 653,
-    "fontSize": 59,
+    "fontSize": 59,           // ProPresenter 6 font size
+    "pptxFontScale": 0.4,     // Scale factor for PowerPoint font (0.4 = 40% of PP6 size)
+    "pptxXoffset": -50,       // X position offset for PowerPoint
+    "pptxYoffset": -100,      // Y position offset for PowerPoint
     "fontFamily": "Arial",
     "media": "slide1.png"
 }
@@ -141,8 +192,11 @@ For precise text positioning and custom formatting, create JSON configuration fi
 The generator automatically detects JSON files and:
 - Positions text at exact coordinates
 - Uses specified font family and size
+- PowerPoint font size scales relative to PP6 size using pptxFontScale
+- PowerPoint position can be fine-tuned with pptxXoffset and pptxYoffset
 - Creates slides with transparent text overlays
-- Matches ProPresenter 6's text rendering format
+- Matches each format's text rendering requirements
+- PowerPoint: Uses left alignment for JSON-based slides, center for songs
 
 ## Important Notes
 

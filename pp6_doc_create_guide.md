@@ -229,13 +229,16 @@ Create a `.json` file for each slide with the following structure:
     "text": "日期: 7/6, 18/7",
     "x": 100,
     "y": 100,
-    "width": 374,        // optional, defaults to 374
-    "height": 55,        // optional, defaults to 55
-    "fontSize": 24,
+    "width": 374,           // optional, defaults to 374
+    "height": 55,           // optional, defaults to 55
+    "fontSize": 24,         // font size for ProPresenter 6
+    "pptxFontScale": 0.5,   // optional, scales PP6 fontSize for PowerPoint (0.5 = half size)
+    "pptxXoffset": -20,     // optional, adjusts X position for PowerPoint
+    "pptxYoffset": -30,     // optional, adjusts Y position for PowerPoint
     "fontFamily": "Arial",
-    "fontBold": false,   // optional, defaults to false
-    "color": "#000000",  // currently not used
-    "media": "slide1.png" // optional, looks for matching media file
+    "fontBold": false,      // optional, defaults to false
+    "color": "#000000",     // used for PowerPoint text color
+    "media": "slide1.png"   // optional, looks for matching media file
 }
 ```
 

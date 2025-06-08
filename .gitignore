@@ -13,6 +13,10 @@ __pycache__/
 generated_*.pro6
 generated_playlist/
 *.pro6plx
+*.pptx
+GeneratedPlaylist/
+GeneratedPresentation.*
+TestGeneratedPlaylist/
 
 # Environment
 .env

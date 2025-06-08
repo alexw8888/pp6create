@@ -3,3 +3,23 @@ sample_playlist2
 source_materials
 venv
 .DS_Store
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Generated files
+generated_*.pro6
+generated_playlist/
+*.pro6plx
+
+# Environment
+.env
+
+# Temporary files
+*.tmp
+*.temp
+*.log
+Sample playlist
+*.zip

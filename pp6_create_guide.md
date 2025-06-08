@@ -298,6 +298,30 @@ source_materials/doc1/
 └── 04_outro.txt      # Text for slide 4
 ```
 
+## Song Arrangements
+
+Songs in ProPresenter 6 can have arrangements that define the playback order of sections:
+
+### Arrangement Structure
+```xml
+<array rvXMLIvarName="arrangements">
+    <RVSongArrangement color="0 0 0 0" name="arrangement1" uuid="[UUID]">
+        <array rvXMLIvarName="groupIDs">
+            <NSString>[Group UUID for V1]</NSString>
+            <NSString>[Group UUID for C1]</NSString>
+            <NSString>[Group UUID for V1]</NSString>
+            <NSString>[Group UUID for C1]</NSString>
+        </array>
+    </RVSongArrangement>
+</array>
+```
+
+### Key Points:
+- Set `selectedArrangementID="[arrangement UUID]"` in the root element
+- Each `NSString` contains the UUID of a slide group
+- Groups can be repeated in the arrangement
+- The arrangement defines the playback order during presentation
+
 ## Important Notes
 
 1. **No XML Declaration** - Do not include `<?xml version="1.0" encoding="utf-8"?>`

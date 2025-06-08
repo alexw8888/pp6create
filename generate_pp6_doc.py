@@ -10,6 +10,11 @@ import uuid
 import xml.etree.ElementTree as ET
 from pathlib import Path
 from typing import List, Dict, Tuple, Union, Optional
+import re
+from dotenv import load_dotenv
+
+# Load environment variables
+load_dotenv()
 
 
 class PP6Generator:
@@ -19,6 +24,18 @@ class PP6Generator:
         self.build_number = "100991749"
         self.version_number = "600"
         
+        # Section colors for songs (matching arrangement.pro6)
+        self.section_colors = {
+            'verse': '0 0 0.9981992244720459 1',  # Blue
+            'chorus': '0.9859541654586792 0 0.02694005146622658 1',  # Red
+            'bridge': '1 1 1 1',  # White
+            'prechorus': '0.1352526992559433 1 0.0248868502676487 1',  # Green
+            'tag': '0.9986009597778321 0.9998570442199707 0 1',  # Yellow
+            'intro': '0.5 0.5 0.5 1',  # Gray
+            'outro': '0.5 0.5 0.5 1',  # Gray
+            'default': '0.2637968361377716 0.2637968361377716 0.2637968361377716 1'  # Dark gray
+        }
+        
     def generate_uuid(self) -> str:
         """Generate a valid UUID4 in uppercase format"""
         return str(uuid.uuid4()).upper()
@@ -26,14 +43,18 @@ class PP6Generator:
     def encode_text(self, text: str) -> str:
         """Encode text in RTF format matching ProPresenter 6 Mac format"""
         # RTF format for Mac ProPresenter 6
+        # Replace newlines with RTF line breaks
+        rtf_text = text.replace('\n', '\\\n')
+        
         rtf_template = r"""{\rtf1\ansi\ansicpg1252\cocoartf2822
 \cocoatextscaling0\cocoaplatform0{\fonttbl\f0\fnil\fcharset134 PingFangSC-Semibold;}
 {\colortbl;\red255\green255\blue255;\red255\green255\blue255;\red0\green0\blue0;}
 {\*\expandedcolortbl;;\csgray\c100000;\cssrgb\c0\c0\c0;}
 \pard\pardirnatural\qc\partightenfactor0
 
-\f0\b\fs113\fsmilli57000 \cf2 \kerning1\expnd8\expndtw40
-\outl0\strokewidth-40 \strokec3 """ + text + r""" }"""
+\f0\b\fs114 \cf2 \kerning1\expnd8\expndtw40
+\outl0\strokewidth-40 \strokec3 """ + rtf_text + r"""
+}"""
         rtf_b64 = base64.b64encode(rtf_template.encode('utf-8')).decode('ascii')
         return rtf_b64
     
@@ -337,6 +358,234 @@ class PP6Generator:
         xml_string = ET.tostring(elem, encoding='unicode')
         return xml_string
     
+    def parse_song_file(self, filepath: str) -> Tuple[Dict[str, List[str]], List[str]]:
+        """Parse song file to extract sections and arrangement"""
+        with open(filepath, 'r', encoding='utf-8') as f:
+            lines = f.read().strip().split('\n')
+        
+        # First pass: find arrangement line to get valid section names
+        arrangement = []
+        arrangement_line_index = -1
+        for i, line in enumerate(lines):
+            if line.strip().startswith('Arrangement'):
+                arrangement_line_index = i
+                if i + 1 < len(lines):
+                    arrangement = lines[i + 1].strip().split()
+                break
+        
+        # Extract unique section names from arrangement
+        valid_sections = set(arrangement)
+        
+        # Second pass: parse sections based on valid section names
+        sections = {}
+        current_section = None
+        
+        for i, line in enumerate(lines):
+            # Skip the arrangement line and the line after it
+            if i == arrangement_line_index or i == arrangement_line_index + 1:
+                continue
+                
+            line_stripped = line.strip()
+            
+            # Check if this line is a valid section header
+            if line_stripped in valid_sections:
+                current_section = line_stripped
+                sections[current_section] = []
+            elif current_section:
+                # Add line to current section (including blank lines)
+                sections[current_section].append(line)
+        
+        return sections, arrangement
+    
+    def get_section_color(self, section_name: str) -> str:
+        """Get color for a section based on its type"""
+        # Try to determine section type from name
+        section_lower = section_name.lower()
+        
+        for key in self.section_colors:
+            if key in section_lower:
+                return self.section_colors[key]
+        
+        # Check common abbreviations
+        if section_lower.startswith('v'):
+            return self.section_colors['verse']
+        elif section_lower.startswith('c'):
+            return self.section_colors['chorus']
+        elif section_lower.startswith('b'):
+            return self.section_colors['bridge']
+        elif section_lower.startswith('pc'):
+            return self.section_colors['prechorus']
+        
+        return self.section_colors['default']
+    
+    def get_section_display_name(self, section_name: str) -> str:
+        """Get display name for a section"""
+        # Map common abbreviations to full names
+        section_lower = section_name.lower()
+        
+        if section_lower.startswith('v'):
+            number = re.search(r'\d+', section_name)
+            if number:
+                return f"Verse {number.group()}"
+            return "Verse"
+        elif section_lower.startswith('c') and not section_lower.startswith('ch'):
+            number = re.search(r'\d+', section_name)
+            if number:
+                return f"Chorus {number.group()}"
+            return "Chorus"
+        elif section_lower.startswith('b'):
+            number = re.search(r'\d+', section_name)
+            if number:
+                return f"Bridge {number.group()}"
+            return "Bridge"
+        elif section_lower.startswith('pc'):
+            number = re.search(r'\d+', section_name)
+            if number:
+                return f"Pre-Chorus {number.group()}"
+            return "Pre-Chorus"
+        
+        return section_name
+    
+    def create_song_document(self, title: str, song_file_path: str, lines_per_slide: int = None) -> ET.Element:
+        """Create a ProPresenter 6 song document with arrangement support
+        
+        Args:
+            title: Song title
+            song_file_path: Path to song text file with sections and arrangement
+            lines_per_slide: Number of lines per slide (default from env or 4)
+        """
+        # Get lines per slide from environment or use default
+        if lines_per_slide is None:
+            lines_per_slide = int(os.getenv('PAGE_BREAK_EVERY', '4'))
+        # Parse the song file
+        sections, arrangement = self.parse_song_file(song_file_path)
+        
+        if not sections:
+            raise ValueError("No sections found in song file")
+        
+        doc_uuid = self.generate_uuid()
+        
+        # Root element
+        root = ET.Element('RVPresentationDocument', {
+            'CCLIArtistCredits': '',
+            'CCLIAuthor': '',
+            'CCLICopyrightYear': '',
+            'CCLIDisplay': 'false',
+            'CCLIPublisher': '',
+            'CCLISongNumber': '',
+            'CCLISongTitle': title,
+            'backgroundColor': '0 0 0 0',
+            'buildNumber': self.build_number,
+            'category': 'Presentation',
+            'chordChartPath': '',
+            'docType': '0',
+            'drawingBackgroundColor': 'false',
+            'height': str(self.height),
+            'lastDateUsed': '2025-06-07T16:09:41-07:00',
+            'notes': '',
+            'os': '2',
+            'resourcesDirectory': '',
+            'selectedArrangementID': '',
+            'usedCount': '0',
+            'uuid': doc_uuid,
+            'versionNumber': self.version_number,
+            'width': str(self.width)
+        })
+        
+        # Timeline
+        timeline = ET.SubElement(root, 'RVTimeline', {
+            'duration': '0.000000',
+            'loop': 'false',
+            'playBackRate': '1.000000',
+            'rvXMLIvarName': 'timeline',
+            'selectedMediaTrackIndex': '0',
+            'timeOffset': '0.000000'
+        })
+        ET.SubElement(timeline, 'array', {'rvXMLIvarName': 'timeCues'})
+        ET.SubElement(timeline, 'array', {'rvXMLIvarName': 'mediaTracks'})
+        
+        # Groups array
+        groups_array = ET.SubElement(root, 'array', {'rvXMLIvarName': 'groups'})
+        
+        # Create unique sections (not duplicates from arrangement)
+        unique_sections = []
+        seen = set()
+        for section in sections.keys():
+            if section not in seen:
+                unique_sections.append(section)
+                seen.add(section)
+        
+        # Track group UUIDs for arrangement
+        section_to_group_uuid = {}
+        
+        # Create a group for each unique section
+        for section_name in unique_sections:
+            section_lines = sections[section_name]
+            
+            # Skip empty sections
+            if not any(line.strip() for line in section_lines):
+                continue
+            
+            group_uuid = self.generate_uuid()
+            section_to_group_uuid[section_name] = group_uuid
+            display_name = self.get_section_display_name(section_name)
+            color = self.get_section_color(section_name)
+            
+            group = ET.SubElement(groups_array, 'RVSlideGrouping', {
+                'color': color,
+                'name': display_name,
+                'uuid': group_uuid
+            })
+            
+            slides_array = ET.SubElement(group, 'array', {'rvXMLIvarName': 'slides'})
+            
+            # Split section content into slides
+            slide_texts = []
+            current_slide_lines = []
+            
+            for line in section_lines:
+                if line.strip():  # Non-empty line
+                    current_slide_lines.append(line.strip())
+                    if len(current_slide_lines) >= lines_per_slide:
+                        slide_texts.append('\n'.join(current_slide_lines))
+                        current_slide_lines = []
+            
+            # Add remaining lines as last slide
+            if current_slide_lines:
+                slide_texts.append('\n'.join(current_slide_lines))
+            
+            # Create slides for this section
+            for i, slide_text in enumerate(slide_texts):
+                slide_label = f"{section_name}-{i+1}" if len(slide_texts) > 1 else ""
+                slide, slide_uuid = self.create_slide(slide_text, None, slide_label)
+                slides_array.append(slide)
+        
+        # Arrangements array
+        arrangements_array = ET.SubElement(root, 'array', {'rvXMLIvarName': 'arrangements'})
+        
+        # Create arrangement based on the song file
+        if arrangement:
+            arrangement_uuid = self.generate_uuid()
+            song_arrangement = ET.SubElement(arrangements_array, 'RVSongArrangement', {
+                'color': '0 0 0 0',
+                'name': 'arrangement1',
+                'uuid': arrangement_uuid
+            })
+            
+            # Add group IDs array
+            group_ids_array = ET.SubElement(song_arrangement, 'array', {'rvXMLIvarName': 'groupIDs'})
+            
+            # Add group IDs in arrangement order
+            for section in arrangement:
+                if section in section_to_group_uuid:
+                    ns_string = ET.SubElement(group_ids_array, 'NSString')
+                    ns_string.text = section_to_group_uuid[section]
+            
+            # Set the selected arrangement ID in root
+            root.set('selectedArrangementID', arrangement_uuid)
+        
+        return root
+    
     def generate_from_directory(self, source_dir: str, output_file: str):
         """Generate PP6 document from all media and text files in a directory"""
         source_path = Path(source_dir)
@@ -411,17 +660,51 @@ class PP6Generator:
 
 def main():
     """Main function to run the generator"""
+    import argparse
+    
+    parser = argparse.ArgumentParser(description='Generate ProPresenter 6 documents')
+    parser.add_argument('--type', choices=['document', 'song'], default='document',
+                       help='Type of PP6 document to generate')
+    parser.add_argument('--source', help='Source directory or file path')
+    parser.add_argument('--output', help='Output .pro6 file path')
+    parser.add_argument('--title', help='Document/song title')
+    parser.add_argument('--lines-per-slide', type=int, default=None,
+                       help='Lines per slide for songs (default: from PAGE_BREAK_EVERY env or 4)')
+    
+    args = parser.parse_args()
+    
     generator = PP6Generator()
     
-    # Generate from doc1
-    source_dir = "source_materials/doc1"
-    output_file = "generated_doc1.pro6"
-    
-    try:
-        generator.generate_from_directory(source_dir, output_file)
+    if args.type == 'song':
+        # Generate song document
+        if not args.source or not args.output:
+            print("Error: For songs, --source (song text file) and --output are required")
+            return
         
-    except Exception as e:
-        print(f"Error generating document: {e}")
+        title = args.title or Path(args.source).stem.replace('_', ' ').title()
+        
+        try:
+            doc = generator.create_song_document(title, args.source, args.lines_per_slide)
+            xml_content = generator.format_xml(doc)
+            
+            with open(args.output, 'w', encoding='utf-8') as f:
+                f.write(xml_content)
+            
+            print(f"Generated song document: {args.output}")
+            
+        except Exception as e:
+            print(f"Error generating song document: {e}")
+    
+    else:
+        # Generate regular document from directory
+        source_dir = args.source or "source_materials/doc1"
+        output_file = args.output or "generated_doc1.pro6"
+        
+        try:
+            generator.generate_from_directory(source_dir, output_file)
+            
+        except Exception as e:
+            print(f"Error generating document: {e}")
 
 
 if __name__ == "__main__":

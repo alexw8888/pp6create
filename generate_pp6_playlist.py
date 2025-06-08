@@ -14,7 +14,21 @@ import platform
 import argparse
 import zipfile
 from typing import List, Dict, Tuple
+from dotenv import load_dotenv
 from generate_pp6_doc import PP6Generator  # Import existing document generator
+
+# Load environment variables
+load_dotenv()
+
+
+def is_song_file(filepath: str) -> bool:
+    """Check if a text file is a song file by looking for 'Arrangement' line"""
+    try:
+        with open(filepath, 'r', encoding='utf-8') as f:
+            content = f.read()
+            return 'Arrangement' in content
+    except:
+        return False
 
 
 class PP6PlaylistGenerator:
@@ -126,74 +140,87 @@ class PP6PlaylistGenerator:
     
     def generate_playlist_xml(self) -> ET.Element:
         """Generate the data.pro6pl XML structure"""
-        # Create root element
+        from datetime import datetime
+        import time
+        
+        # Create root element with proper playlist attributes
         root = ET.Element("RVPlaylistDocument")
-        root.set("CCLIArtistCredits", "")
-        root.set("CCLIAuthor", "")
-        root.set("CCLICopyrightInfo", "")
-        root.set("CCLIPublisher", "")
-        root.set("CCLISongNumber", "")
-        root.set("CCLISongTitle", "")
-        root.set("backgroundColor", "0 0 0 1")
-        root.set("creatorCode", str(self.os_type))
-        root.set("docType", "0")
-        root.set("drawingBackgroundColor", "false")
-        root.set("height", "768")
-        root.set("lastDateUsed", "2025-01-07T00:00:00")
-        root.set("notes", "")
-        root.set("os", str(self.os_type))
-        root.set("resourcesDirectory", "")
-        root.set("selectedArrangementID", "")
-        root.set("usedCount", "0")
-        root.set("uuid", str(uuid.uuid4()).upper())
         root.set("versionNumber", "600")
-        root.set("width", "1024")
+        root.set("os", str(self.os_type))
+        root.set("buildNumber", "100991749")
         
-        # Add empty arrays
-        for array_name in ["array", "arrangements", "groups"]:
-            ET.SubElement(root, array_name)
+        # Get current time with timezone
+        now = datetime.now()
+        # Format like "2025-06-07T17:53:36-07:00"
+        tz_offset = time.strftime('%z')
+        if tz_offset:
+            # Insert colon in timezone offset
+            tz_offset = tz_offset[:-2] + ':' + tz_offset[-2:]
+        else:
+            tz_offset = "+00:00"
+        timestamp = now.strftime(f"%Y-%m-%dT%H:%M:%S{tz_offset}")
         
-        # Create root playlist node
+        # Create root node
+        root_node_uuid = str(uuid.uuid4()).upper()
         root_node = ET.SubElement(root, "RVPlaylistNode")
-        root_node.set("displayName", self.playlist_name)
-        root_node.set("type", "3")
-        root_node.set("uuid", str(uuid.uuid4()).upper())
+        root_node.set("displayName", "root")
+        root_node.set("UUID", root_node_uuid)
+        root_node.set("smartDirectoryURL", "")
+        root_node.set("modifiedDate", timestamp)
+        root_node.set("type", "0")
+        root_node.set("isExpanded", "false")
+        root_node.set("hotFolderType", "2")
+        root_node.set("rvXMLIvarName", "rootNode")
         
-        # Create playlistNodes array
-        playlist_nodes = ET.SubElement(root_node, "playlistNodes")
+        # Create children array
+        children = ET.SubElement(root_node, "array")
+        children.set("rvXMLIvarName", "children")
         
-        # Add documents to playlist
+        # Create playlist node
+        playlist_uuid = str(uuid.uuid4()).upper()
+        playlist_node = ET.SubElement(children, "RVPlaylistNode")
+        playlist_node.set("displayName", self.playlist_name)
+        playlist_node.set("UUID", playlist_uuid)
+        playlist_node.set("smartDirectoryURL", "")
+        playlist_node.set("modifiedDate", timestamp)
+        playlist_node.set("type", "3")
+        playlist_node.set("isExpanded", "false")
+        playlist_node.set("hotFolderType", "2")
+        
+        # Create playlist children array
+        playlist_children = ET.SubElement(playlist_node, "array")
+        playlist_children.set("rvXMLIvarName", "children")
+        
+        # Add documents as RVDocumentCue
         for doc in self.documents:
-            doc_node = ET.SubElement(playlist_nodes, "RVPlaylistNode")
-            doc_node.set("displayName", doc['display_name'])
-            doc_node.set("type", "0")
-            doc_node.set("uuid", doc['uuid'])
-            
-            # Add document cue
-            doc_cue = ET.SubElement(doc_node, "RVDocumentCue")
+            doc_cue = ET.SubElement(playlist_children, "RVDocumentCue")
             doc_cue.set("UUID", doc['uuid'])
             doc_cue.set("displayName", doc['display_name'])
-            doc_cue.set("delayTime", "0")
-            doc_cue.set("timeStamp", "0")
+            doc_cue.set("actionType", "0")
+            doc_cue.set("enabled", "false")
+            doc_cue.set("timeStamp", "0.000000")
+            doc_cue.set("delayTime", "0.000000")
             
-            # Set file path based on platform
+            # Set file path
             doc_filename = doc['path'].name
-            if self.os_type == 2:  # macOS
-                # Use tilde path for macOS
-                doc_path = f"~/Documents/ProPresenter6/{doc_filename}"
-            else:  # Windows
-                # Use full path for Windows, URL encoded
-                doc_path = f"C:\\Users\\{os.environ.get('USERNAME', 'user')}\\Documents\\ProPresenter6\\{doc_filename}"
-                doc_path = quote(doc_path, safe='')
-            
+            doc_path = f"~/Documents/ProPresenter6/{doc_filename}"
             doc_cue.set("filePath", doc_path)
-            
-            # Add empty sub-elements
-            for elem in ["RVOPreset", "array", "displayTags", "flags", "notes"]:
-                ET.SubElement(doc_cue, elem)
-            
-            # Add empty playlistNodes
-            ET.SubElement(doc_node, "playlistNodes")
+            doc_cue.set("selectedArrangementID", "")
+        
+        # Add empty events array
+        events = ET.SubElement(playlist_node, "array")
+        events.set("rvXMLIvarName", "events")
+        
+        # Add root node events array
+        root_events = ET.SubElement(root_node, "array")
+        root_events.set("rvXMLIvarName", "events")
+        
+        # Add deletions and tags arrays
+        deletions = ET.SubElement(root, "array")
+        deletions.set("rvXMLIvarName", "deletions")
+        
+        tags = ET.SubElement(root, "array")
+        tags.set("rvXMLIvarName", "tags")
         
         return root
     
@@ -232,7 +259,11 @@ class PP6PlaylistGenerator:
         self.indent_xml(playlist_xml)
         tree = ET.ElementTree(playlist_xml)
         playlist_file = self.playlist_path / "data.pro6pl"
-        tree.write(playlist_file, encoding='utf-8', xml_declaration=True)
+        
+        # Write with XML declaration and standalone="yes"
+        with open(playlist_file, 'wb') as f:
+            f.write(b'<?xml version="1.0" encoding="utf-8" standalone="yes"?>\n')
+            tree.write(f, encoding='utf-8', xml_declaration=False)
         
         print(f"Playlist created at: {self.playlist_path}")
         print(f"- Documents: {len(self.documents)}")
@@ -304,9 +335,35 @@ def main():
             for subdir in source_dir.iterdir():
                 if subdir.is_dir():
                     output_file = f"generated_{subdir.name}.pro6"
-                    doc_generator.generate_from_directory(str(subdir), output_file)
+                    
+                    # Check if this directory contains a song file
+                    txt_files = list(subdir.glob('*.txt'))
+                    is_song_dir = False
+                    song_file = None
+                    
+                    for txt_file in txt_files:
+                        if is_song_file(str(txt_file)):
+                            is_song_dir = True
+                            song_file = txt_file
+                            break
+                    
+                    if is_song_dir and song_file:
+                        # Generate as a song document
+                        title = song_file.stem.replace('_', ' ').title()
+                        print(f"Detected song file: {song_file.name}")
+                        doc = doc_generator.create_song_document(title, str(song_file))
+                        xml_content = doc_generator.format_xml(doc)
+                        
+                        with open(output_file, 'w', encoding='utf-8') as f:
+                            f.write(xml_content)
+                        
+                        print(f"Generated song: {output_file}")
+                    else:
+                        # Generate as regular document
+                        doc_generator.generate_from_directory(str(subdir), output_file)
+                        print(f"Generated document: {output_file}")
+                    
                     generated_docs.append(output_file)
-                    print(f"Generated: {output_file}")
         
         # Add generated documents to playlist
         for doc in generated_docs:

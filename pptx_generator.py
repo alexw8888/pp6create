@@ -436,8 +436,13 @@ class PPTXGenerator:
                     arrangement = lines[i + 1].strip().split()
                 break
         
-        # Extract sections
+        # Extract unique section names from arrangement (case insensitive)
         valid_sections = set(arrangement)
+        
+        # Create case-insensitive mapping from arrangement to actual section headers
+        arrangement_to_section = {}
+        
+        # Extract sections
         sections = {}
         current_section = None
         
@@ -447,13 +452,30 @@ class PPTXGenerator:
                 
             line_stripped = line.strip()
             
-            if line_stripped in valid_sections:
-                current_section = line_stripped
+            # Check if this line matches any arrangement section (case insensitive)
+            matched_arrangement = None
+            for arr_section in valid_sections:
+                if line_stripped.lower() == arr_section.lower():
+                    matched_arrangement = arr_section
+                    break
+            
+            if matched_arrangement:
+                current_section = line_stripped  # Use the actual section header as found
                 sections[current_section] = []
+                # Map arrangement name to actual section header
+                arrangement_to_section[matched_arrangement] = line_stripped
             elif current_section:
                 sections[current_section].append(line)
         
-        return sections, arrangement
+        # Update arrangement to use actual section headers
+        updated_arrangement = []
+        for arr_section in arrangement:
+            if arr_section in arrangement_to_section:
+                updated_arrangement.append(arrangement_to_section[arr_section])
+            else:
+                updated_arrangement.append(arr_section)  # Keep original if no mapping found
+        
+        return sections, updated_arrangement
     
     def save(self, output_path: str):
         """Save the presentation to file."""

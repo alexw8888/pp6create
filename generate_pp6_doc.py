@@ -304,6 +304,43 @@ class PP6Generator:
         
         return media_cue
     
+    def create_message_cue(self) -> ET.Element:
+        """Create an RVMessageCue element for countdown timers and automated actions"""
+        cue_uuid = self.generate_uuid()
+        message_uuid = self.generate_uuid()
+        
+        message_cue = ET.Element('RVMessageCue', {
+            'UUID': cue_uuid,
+            'actionType': '0',
+            'delayTime': '0.000000',
+            'displayName': 'Message',
+            'enabled': 'false',
+            'messageUUID': message_uuid,
+            'timeStamp': '0.000000'
+        })
+        
+        # Values dictionary with empty message
+        values_dict = ET.SubElement(message_cue, 'dictionary', {'rvXMLIvarName': 'values'})
+        message_string = ET.SubElement(values_dict, 'NSString', {'rvXMLDictionaryKey': 'Message'})
+        message_string.text = ''
+        
+        return message_cue
+    
+    def create_clear_cue(self) -> ET.Element:
+        """Create an RVClearCue element for clearing props and stage displays"""
+        cue_uuid = self.generate_uuid()
+        
+        clear_cue = ET.Element('RVClearCue', {
+            'UUID': cue_uuid,
+            'actionType': '4',
+            'delayTime': '0.000000',
+            'displayName': 'Clear Props',
+            'enabled': 'false',
+            'timeStamp': '0.000000'
+        })
+        
+        return clear_cue
+    
     def create_slide(self, text: str = None, background_image: str = None, label: str = "") -> Tuple[ET.Element, str]:
         """Create a slide with optional text content and background image"""
         slide_uuid = self.generate_uuid()
@@ -846,7 +883,9 @@ class PP6Generator:
                     'simple_format': simple_format,
                     'vertical_alignment': vertical_alignment,
                     'background_color': background_color,
-                    'color': text_color
+                    'color': text_color,
+                    'countdown_message': config.get('countdown_message', False),
+                    'clear_props': config.get('clear_props', False)
                 }
                 slides_data.append(slide_info)
             else:
@@ -973,8 +1012,14 @@ class PP6Generator:
             'socialItemCount': '1' if config.get('text') else '0'
         })
         
-        # Empty cues array
-        ET.SubElement(slide, 'array', {'rvXMLIvarName': 'cues'})
+        # Cues array - add cues based on config
+        cues_array = ET.SubElement(slide, 'array', {'rvXMLIvarName': 'cues'})
+        if config.get('countdown_message', False):
+            message_cue = self.create_message_cue()
+            cues_array.append(message_cue)
+        if config.get('clear_props', False):
+            clear_cue = self.create_clear_cue()
+            cues_array.append(clear_cue)
         
         # Add background media if provided
         if config.get('background') and os.path.exists(config['background']):

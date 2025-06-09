@@ -349,7 +349,7 @@ python generate_pp6_doc.py --type song --source worship_song.txt --output worshi
 
 ## Environment Variables
 
-- `PAGE_BREAK_EVERY`: Default lines per slide for songs (default: 4)
+- `PAGE_BREAK_EVERY`: Default lines per slide for songs (default: 2)
 
 ## Output
 

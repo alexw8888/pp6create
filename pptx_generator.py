@@ -33,7 +33,7 @@ class PPTXGenerator:
         self.font_family = os.getenv('FONT_FAMILY', 'Arial')
         self.font_color = self._parse_color(os.getenv('FONT_COLOR', '0xFFFFFF'))
         self.top_margin = int(os.getenv('TOP_MARGIN', '100'))
-        self.page_break_every = int(os.getenv('PAGE_BREAK_EVERY', '4'))
+        self.page_break_every = int(os.getenv('PAGE_BREAK_EVERY', '2'))
         
         # Shadow settings
         self.add_text_shadow = os.getenv('ADD_TEXT_SHADOW', 'true').lower() == 'true'

@@ -133,11 +133,11 @@ class PP6Generator:
         Args:
             title: Song title
             song_file_path: Path to song text file with sections and arrangement
-            lines_per_slide: Number of lines per slide (default from env or 4)
+            lines_per_slide: Number of lines per slide (default from env or 2)
         """
         # Get lines per slide from environment or use default
         if lines_per_slide is None:
-            lines_per_slide = int(os.getenv('PAGE_BREAK_EVERY', '4'))
+            lines_per_slide = int(os.getenv('PAGE_BREAK_EVERY', '2'))
         
         # Check for media files in the same directory
         song_dir = Path(song_file_path).parent
@@ -641,7 +641,7 @@ def main():
     parser.add_argument('--output', help='Output .pro6 file path')
     parser.add_argument('--title', help='Document/song title')
     parser.add_argument('--lines-per-slide', type=int, default=None,
-                       help='Lines per slide for songs (default: from PAGE_BREAK_EVERY env or 4)')
+                       help='Lines per slide for songs (default: from PAGE_BREAK_EVERY env or 2)')
     parser.add_argument('--width', type=int, default=1024, help='Slide width in pixels')
     parser.add_argument('--height', type=int, default=768, help='Slide height in pixels')
     

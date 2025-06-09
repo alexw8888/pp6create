@@ -218,4 +218,4 @@ The generator automatically detects JSON files and:
 - Python 3.x with virtual environment (venv)
 - Required packages: python-dotenv
 - Environment variables:
-  - PAGE_BREAK_EVERY: Number of lines per slide for songs (default: 4)
+  - PAGE_BREAK_EVERY: Number of lines per slide for songs (default: 2)

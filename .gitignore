@@ -29,3 +29,5 @@ TestGeneratedPlaylist/
 Sample*
 source_materials_test
 source_materials copy
+macos_app/build
+macos_app/dist

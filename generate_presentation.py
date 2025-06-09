@@ -287,5 +287,33 @@ def main():
     return 0
 
 
+def generate_presentation(source_dir: str, format: str = 'both', output_name: Optional[str] = None, **kwargs):
+    """
+    Wrapper function for GUI integration
+    
+    Args:
+        source_dir: Directory containing source materials
+        format: Output format ('pro6', 'pptx', or 'both')
+        output_name: Output file name (without extension)
+        **kwargs: Additional options
+        
+    Returns:
+        Output directory path where files were generated
+    """
+    generator = UnifiedPresentationGenerator()
+    
+    # Generate presentations
+    generated_files = generator.generate(
+        source_dir=source_dir,
+        output_format=format,
+        output_path=output_name,
+        process_all_subdirs=True,  # Always process subdirs for GUI
+        **kwargs
+    )
+    
+    # Return the source directory (where files are generated)
+    return source_dir
+
+
 if __name__ == "__main__":
     exit(main())

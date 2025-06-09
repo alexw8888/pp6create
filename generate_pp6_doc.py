@@ -769,11 +769,12 @@ class PP6Generator:
             current_slide_lines = []
             
             for line in section_lines:
-                if line.strip():  # Non-empty line
-                    current_slide_lines.append(line.strip())
-                    if len(current_slide_lines) >= lines_per_slide:
-                        slide_texts.append('\n'.join(current_slide_lines))
-                        current_slide_lines = []
+                current_slide_lines.append(line.rstrip())  # Remove trailing whitespace but keep blank lines
+                
+                # Break slide when we reach the target number of total lines (including blank lines)
+                if len(current_slide_lines) >= lines_per_slide:
+                    slide_texts.append('\n'.join(current_slide_lines))
+                    current_slide_lines = []
             
             # Add remaining lines as last slide
             if current_slide_lines:

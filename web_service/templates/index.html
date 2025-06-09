@@ -1,0 +1,149 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PP6 Presentation Generator</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/app.css') }}">
+</head>
+<body>
+    <div class="container">
+        <!-- Header -->
+        <div class="header">
+            <h1>ProPresenter 6 & PowerPoint Generator</h1>
+            <p class="subtitle">Create presentations from your source materials</p>
+        </div>
+        
+        <!-- Status Container for Alerts -->
+        <div id="status-container"></div>
+        
+        <!-- Main Content -->
+        <div class="main-content">
+            <!-- Sidebar -->
+            <div class="sidebar">
+                <!-- Workspace Panel -->
+                <div class="workspace-panel">
+                    <div class="workspace-info">
+                        <h3>📂 Workspace</h3>
+                        <div class="workspace-id" id="session-id">Initializing...</div>
+                        <small id="workspace-path"></small>
+                    </div>
+                    
+                    <div class="file-actions">
+                        <button class="btn btn-sm btn-primary" id="new-session-btn">🔄 New Session</button>
+                        <button class="btn btn-sm" id="refresh-btn">🔄 Refresh</button>
+                        <button class="btn btn-sm btn-outline" id="create-folder-btn">📁 New Folder</button>
+                    </div>
+                </div>
+                
+                <!-- File Manager -->
+                <div class="file-manager">
+                    <h3>📋 Files</h3>
+                    <div id="breadcrumb" style="font-size: 0.8em; margin-bottom: 10px; color: #666;"></div>
+                    <div class="file-tree" id="file-tree">
+                        <div class="loading">Loading files...</div>
+                    </div>
+                    
+                    <!-- Upload Zone -->
+                    <div class="upload-zone" id="upload-zone">
+                        <div class="upload-icon">📤</div>
+                        <div class="upload-text">
+                            <strong>Click or drag files here to upload</strong><br>
+                            <small>Supports: .txt, .json, .jpg, .png, .gif</small>
+                        </div>
+                        <input type="file" id="file-input" multiple style="display: none;">
+                        <div id="upload-status" style="display: none; margin-top: 10px;"></div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Content Area -->
+            <div class="content-area">
+                <!-- Editor Panel -->
+                <div class="editor-panel">
+                    <div class="editor-header">
+                        <div class="editor-title" id="editor-title">No file selected</div>
+                        <div class="editor-actions">
+                            <button class="btn btn-sm btn-success" id="save-btn" style="display: none;">💾 Save</button>
+                        </div>
+                    </div>
+                    
+                    <div class="editor-content" id="editor-content" style="display: none;">
+                        <textarea class="code-editor" id="code-editor" placeholder="File content will appear here..."></textarea>
+                    </div>
+                    
+                    <div id="file-info" style="padding: 20px; color: #666;">
+                        <p>Select a file to view or edit</p>
+                    </div>
+                </div>
+                
+                <!-- Generation Panel -->
+                <div class="generation-panel">
+                    <h3>🚀 Generate Presentation</h3>
+                    
+                    <div class="format-options">
+                        <div class="format-option">
+                            <input type="radio" name="format" value="both" id="format-both" checked>
+                            <label for="format-both">Both (PP6 + PowerPoint)</label>
+                        </div>
+                        <div class="format-option">
+                            <input type="radio" name="format" value="pro6" id="format-pro6">
+                            <label for="format-pro6">ProPresenter 6 Only</label>
+                        </div>
+                        <div class="format-option">
+                            <input type="radio" name="format" value="pptx" id="format-pptx">
+                            <label for="format-pptx">PowerPoint Only</label>
+                        </div>
+                    </div>
+                    
+                    <div class="generation-options">
+                        <div class="option-group">
+                            <label for="output-name">Output Name</label>
+                            <input type="text" class="form-control" id="output-name" placeholder="MyPresentation">
+                        </div>
+                        
+                        <div class="option-group">
+                            <label for="width">Width (px)</label>
+                            <input type="number" class="form-control" id="width" value="1024">
+                        </div>
+                        
+                        <div class="option-group">
+                            <label for="height">Height (px)</label>
+                            <input type="number" class="form-control" id="height" value="768">
+                        </div>
+                    </div>
+                    
+                    <div class="generation-controls">
+                        <button class="btn" id="generate-btn">🚀 Generate</button>
+                        <button class="btn btn-success" id="download-pp6-btn" style="display: none;">📥 Download PP6</button>
+                        <button class="btn btn-success" id="download-pptx-btn" style="display: none;">📥 Download PowerPoint</button>
+                    </div>
+                    
+                    <!-- Progress Container -->
+                    <div class="progress-container" id="progress-container">
+                        <div class="progress-bar">
+                            <div class="progress-fill" id="progress-fill"></div>
+                        </div>
+                        <div class="progress-text" id="progress-text">Starting...</div>
+                    </div>
+                    
+                    <!-- Results Panel -->
+                    <div class="results-panel" id="results-panel" style="display: none;">
+                        <!-- Download links will appear here -->
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Load CodeMirror for syntax highlighting -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/codemirror.min.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/theme/default.min.css">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/codemirror.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/mode/javascript/javascript.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/mode/xml/xml.min.js"></script>
+    
+    <!-- Main Application -->
+    <script src="{{ url_for('static', filename='js/app.js') }}"></script>
+</body>
+</html>

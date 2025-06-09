@@ -95,6 +95,7 @@ class GenerationService:
 
 #### 2.1 Main Dashboard
 - **Workspace Overview**: Show current source_materials structure
+- **Session Management**: New Session button to refresh workspace with latest template
 - **Quick Actions**: Generate PP6, Generate PowerPoint, Generate Both
 - **Settings Panel**: Environment variables (.env editor)
 - **Progress Indicator**: Real-time generation status
@@ -130,26 +131,35 @@ class GenerationService:
 - **Progress Indicators**: Upload progress bars
 - **File Validation**: Check file types and sizes
 
-#### 2.4 Generation Interface
+#### 2.4 Session Management & Generation Interface
 ```html
-<div class="generation-panel">
-  <div class="format-selection">
-    <input type="radio" name="format" value="both" checked> Both Formats
-    <input type="radio" name="format" value="pro6"> ProPresenter 6 Only
-    <input type="radio" name="format" value="pptx"> PowerPoint Only
+<div class="control-panel">
+  <div class="session-controls">
+    <button class="new-session-btn" onclick="app.createNewSession()">
+      🔄 New Session (Refresh Template)
+    </button>
+    <span class="session-info">Session: <span id="session-id">Loading...</span></span>
   </div>
   
-  <div class="options">
-    <input type="text" name="output_name" placeholder="Output name">
-    <input type="number" name="width" value="1024" placeholder="Width">
-    <input type="number" name="height" value="768" placeholder="Height">
-  </div>
-  
-  <button class="generate-btn">Generate Presentation</button>
-  
-  <div class="progress-container" style="display: none;">
-    <div class="progress-bar"></div>
-    <div class="progress-text">Processing...</div>
+  <div class="generation-panel">
+    <div class="format-selection">
+      <input type="radio" name="format" value="both" checked> Both Formats
+      <input type="radio" name="format" value="pro6"> ProPresenter 6 Only
+      <input type="radio" name="format" value="pptx"> PowerPoint Only
+    </div>
+    
+    <div class="options">
+      <input type="text" name="output_name" placeholder="Output name">
+      <input type="number" name="width" value="1024" placeholder="Width">
+      <input type="number" name="height" value="768" placeholder="Height">
+    </div>
+    
+    <button class="generate-btn">Generate Presentation</button>
+    
+    <div class="progress-container" style="display: none;">
+      <div class="progress-bar"></div>
+      <div class="progress-text">Processing...</div>
+    </div>
   </div>
 </div>
 ```
@@ -292,6 +302,22 @@ class PP6WebApp {
         this.renderFileTree(files);
     }
     
+    async createNewSession() {
+        // Clean up current workspace
+        if (this.sessionId) {
+            await fetch(`/api/workspace/${this.sessionId}`, {
+                method: 'DELETE'
+            });
+        }
+        
+        // Create new workspace
+        await this.initializeWorkspace();
+        
+        // Update UI
+        this.clearEditor();
+        this.showNotification('New session created with latest template');
+    }
+    
     async generatePresentation(options) {
         const response = await fetch(`/api/generate/${this.sessionId}`, {
             method: 'POST',
@@ -317,6 +343,31 @@ class PP6WebApp {
                 this.handleGenerationComplete(status);
             }
         }, 1000);
+    }
+    
+    setupEventHandlers() {
+        // Add event listeners for UI elements
+        document.addEventListener('DOMContentLoaded', () => {
+            // Update session ID display
+            this.updateSessionDisplay();
+        });
+    }
+    
+    updateSessionDisplay() {
+        const sessionElement = document.getElementById('session-id');
+        if (sessionElement && this.sessionId) {
+            sessionElement.textContent = this.sessionId.substring(0, 8) + '...';
+        }
+    }
+    
+    clearEditor() {
+        // Clear any open file editors
+        console.log('Editor cleared for new session');
+    }
+    
+    showNotification(message) {
+        // Simple notification - could be enhanced with a proper notification system
+        alert(message);
     }
 }
 
@@ -372,21 +423,19 @@ This guide is specifically tailored for Amazon Linux 2023 AMI 2023.7.20250527.1 
 
 #### 1. Install Dependencies
 ```bash
-# Install EPEL repository for additional packages
-sudo dnf install epel-release -y
-
 # Update system
 sudo dnf update -y
 
 # Install Python and dependencies
-sudo dnf install python3 python3-pip python3-devel nginx redis -y
+# Note: Amazon Linux 2023 includes these packages without needing EPEL
+sudo dnf install python3 python3-pip python3-devel nginx redis6 -y
 
 # Install system packages for image processing
 sudo dnf install libjpeg-devel zlib-devel freetype-devel -y
 
-# Enable and start Redis service (Amazon Linux 2023 uses systemd)
-sudo systemctl enable redis
-sudo systemctl start redis
+# Enable and start Redis service (service name is redis6 in Amazon Linux 2023)
+sudo systemctl enable redis6
+sudo systemctl start redis6
 ```
 
 #### 2. Application Setup
@@ -396,7 +445,7 @@ sudo mkdir -p /opt/pp6-web-service
 cd /opt/pp6-web-service
 
 # Copy application files
-sudo cp -r /path/to/your/web_service/* .
+sudo cp -r /home/ec2-user/pp6create/web_service/* .
 
 # Create virtual environment
 sudo python3 -m venv venv
@@ -424,8 +473,14 @@ sudo restorecon -Rv /tmp/pp6_workspaces
 ```
 
 #### 3. Service Configuration
+
+Create the systemd service file for the web application:
+```bash
+sudo nano /etc/systemd/system/pp6-web.service
+```
+
+Add the following content to the file:
 ```ini
-# /etc/systemd/system/pp6-web.service
 [Unit]
 Description=PP6 Web Service
 After=network.target
@@ -444,11 +499,16 @@ Restart=always
 WantedBy=multi-user.target
 ```
 
+Create the systemd service file for the Celery worker:
+```bash
+sudo nano /etc/systemd/system/pp6-worker.service
+```
+
+Add the following content to the file:
 ```ini
-# /etc/systemd/system/pp6-worker.service
 [Unit]
 Description=PP6 Celery Worker
-After=network.target redis.service
+After=network.target redis6.service
 
 [Service]
 Type=simple
@@ -456,7 +516,9 @@ User=nginx
 Group=nginx
 WorkingDirectory=/opt/pp6-web-service
 Environment=PATH=/opt/pp6-web-service/venv/bin
-ExecStart=/opt/pp6-web-service/venv/bin/celery -A services.generator worker --loglevel=info
+Environment=CELERY_BROKER_URL=redis://localhost:6379/0
+Environment=CELERY_RESULT_BACKEND=redis://localhost:6379/0
+ExecStart=/opt/pp6-web-service/venv/bin/celery -A services.generator worker --loglevel=info --broker=redis://localhost:6379/0
 Restart=always
 
 [Install]
@@ -464,8 +526,30 @@ WantedBy=multi-user.target
 ```
 
 #### 4. Nginx Configuration
+
+Create the sites-available and sites-enabled directories (Amazon Linux 2023 doesn't create these by default):
+```bash
+sudo mkdir -p /etc/nginx/sites-available
+sudo mkdir -p /etc/nginx/sites-enabled
+```
+
+Edit the main nginx configuration to include sites-enabled:
+```bash
+sudo nano /etc/nginx/nginx.conf
+```
+
+Add this line in the `http` block (before the closing brace):
 ```nginx
-# /etc/nginx/sites-available/pp6-web
+include /etc/nginx/sites-enabled/*;
+```
+
+Create the site configuration file:
+```bash
+sudo nano /etc/nginx/sites-available/pp6-web
+```
+
+Add the following content:
+```nginx
 server {
     listen 80;
     server_name your-domain.com;
@@ -493,20 +577,23 @@ server {
 }
 ```
 
-#### 5. Start Services
-```bash
-# Configure firewall (firewalld is default on Amazon Linux 2023)
-sudo firewall-cmd --permanent --add-service=http
-sudo firewall-cmd --permanent --add-service=https
-sudo firewall-cmd --reload
+#### 5. Configure AWS Security Groups
+Configure your EC2 Security Group to allow web traffic:
+- **Port 80 (HTTP)** - for web access
+- **Port 443 (HTTPS)** - for SSL (optional)
+- **Port 22 (SSH)** - for administration
 
+In AWS Console: EC2 → Security Groups → Select your instance's security group → Add inbound rules
+
+#### 6. Start Services
+```bash
 # Enable and start services
-sudo systemctl enable redis
+sudo systemctl enable redis6
 sudo systemctl enable pp6-web
 sudo systemctl enable pp6-worker
 sudo systemctl enable nginx
 
-sudo systemctl start redis
+sudo systemctl start redis6
 sudo systemctl start pp6-web
 sudo systemctl start pp6-worker
 sudo systemctl restart nginx
@@ -514,6 +601,48 @@ sudo systemctl restart nginx
 # Enable nginx site
 sudo ln -s /etc/nginx/sites-available/pp6-web /etc/nginx/sites-enabled/
 sudo nginx -t && sudo systemctl reload nginx
+```
+
+#### 7. Test the Installation
+```bash
+# Check service status
+sudo systemctl status redis6
+sudo systemctl status nginx
+sudo systemctl status pp6-web
+sudo systemctl status pp6-worker
+
+# Test Redis connection
+redis-cli ping
+
+# Test nginx configuration
+sudo nginx -t
+
+# Check if services are listening on correct ports
+sudo netstat -tlnp | grep :80    # nginx
+sudo netstat -tlnp | grep :5000  # Flask app
+sudo netstat -tlnp | grep :6379  # Redis
+
+# Test web service locally
+curl http://localhost
+curl http://localhost/api/workspace/create -X POST
+
+# Test from your browser (replace with your EC2 public IP)
+# http://YOUR-EC2-PUBLIC-IP
+```
+
+#### 8. View Logs (if something isn't working)
+```bash
+# Check service logs
+sudo journalctl -u pp6-web -f
+sudo journalctl -u pp6-worker -f
+sudo journalctl -u nginx -f
+sudo journalctl -u redis6 -f
+
+# Check nginx error logs
+sudo tail -f /var/log/nginx/error.log
+
+# Check application logs (if configured)
+sudo tail -f /opt/pp6-web-service/logs/pp6-web.log
 ```
 
 ## Security Considerations (Amazon Linux 2023)
@@ -614,8 +743,69 @@ if not app.debug:
 - **Touch Gestures**: Mobile file management
 - **Photo Upload**: Direct camera integration
 
+## Implementation Status
+
+### ✅ Completed Features (Phase 1 & 2)
+
+**Backend Services**:
+- ✅ Flask application with complete API endpoints
+- ✅ Workspace management with session isolation 
+- ✅ File upload, edit, and management system
+- ✅ Celery + Redis background task processing
+- ✅ Complete presentation generation (PP6 + PowerPoint)
+- ✅ SELinux and Amazon Linux 2023 compatibility
+
+**Frontend Interface**:
+- ✅ Responsive web UI with file tree navigation
+- ✅ CodeMirror-based text/JSON editor with syntax highlighting
+- ✅ Drag & drop file upload interface
+- ✅ Real-time generation progress tracking
+- ✅ **New Session functionality** - refresh workspace with latest template
+- ✅ **Download buttons** - direct download of generated PP6 and PowerPoint files
+- ✅ Session management and workspace cleanup
+
+**Deployment**:
+- ✅ Amazon Linux 2023 systemd service configuration
+- ✅ Nginx reverse proxy setup
+- ✅ Redis6 integration for task queue
+- ✅ Production-ready error handling and logging
+
+### 🎯 Key Features
+
+1. **Multi-format Generation**: Creates both ProPresenter 6 (.pro6plx) and PowerPoint (.pptx) files
+2. **Template Management**: Users can refresh their workspace to get latest source_materials updates
+3. **Real-time Processing**: Background tasks with live progress updates
+4. **File Management**: Full upload, edit, create folder capabilities
+5. **Direct Downloads**: Dedicated buttons for downloading generated presentations
+6. **Session Isolation**: Each user gets isolated workspace in `/tmp/pp6_workspaces/`
+
+### 🚀 Production Deployment
+
+The web service is successfully deployed and operational on Amazon Linux 2023 with:
+- **URL**: `http://alex.zetakey.com` 
+- **Backend**: Flask + Gunicorn on port 5000
+- **Task Queue**: Celery workers with Redis
+- **Web Server**: Nginx reverse proxy
+- **File Storage**: User workspaces in `/tmp/pp6_workspaces/`
+- **Template Source**: `/opt/pp6-web-service/source_materials/`
+
+### 📋 Usage Workflow
+
+1. **Access**: Navigate to web interface
+2. **Edit**: Modify source materials using built-in editors
+3. **Upload**: Add new images, text files, or JSON configurations
+4. **Generate**: Click "🚀 Generate" to create presentations
+5. **Download**: Use dedicated download buttons for PP6 or PowerPoint files
+6. **Refresh**: Click "🔄 New Session" to get latest template updates
+
 ## Conclusion
 
-This implementation plan provides a comprehensive roadmap for transforming the CLI-based PP6 generator into a modern web service. The phased approach allows for incremental development and testing, while the modular architecture ensures maintainability and scalability.
+The PP6 Web Service successfully transforms the CLI-based generator into a modern, user-friendly web application. The implementation provides all the powerful features of the original command-line tool while adding:
 
-The service will provide users with an intuitive web interface for creating professional presentations while maintaining all the powerful features of the original command-line tool.
+- **Ease of Use**: Intuitive web interface eliminates need for command-line knowledge
+- **Real-time Feedback**: Live progress updates and immediate download access
+- **Multi-user Support**: Isolated workspaces and session management
+- **Template Management**: Easy refresh mechanism for updated source materials
+- **Production Ready**: Robust error handling, logging, and deployment configuration
+
+The service maintains the full functionality of the original CLI tool while providing a significantly improved user experience through its web interface.

@@ -1,0 +1,20 @@
+# Flask and web framework
+flask==2.3.3
+flask-cors==4.0.0
+
+# Background tasks
+celery==5.3.1
+redis==4.6.0
+
+# Core dependencies (from main project)
+python-dotenv==1.0.0
+Pillow==10.0.0
+python-pptx==0.6.21
+lxml==4.9.3
+
+# Production server
+gunicorn==21.2.0
+
+# Additional utilities
+werkzeug==2.3.7
+click==8.1.7

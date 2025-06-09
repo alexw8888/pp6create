@@ -41,6 +41,12 @@ class PPTXGenerator:
         self.shadow_offset_y = int(os.getenv('SHADOW_OFFSET_Y', '2'))
         self.shadow_blur_radius = float(os.getenv('SHADOW_BLUR_RADIUS', '3'))
         
+        # Arrangement tag settings
+        self.show_arrangement_tag = os.getenv('SHOW_ARRANGEMENT_TAG', 'true').lower() == 'true'
+        self.arrangement_tag_font_size = int(os.getenv('ARRANGEMENT_TAG_FONT_SIZE', '16'))
+        self.arrangement_tag_color = self._parse_color(os.getenv('ARRANGEMENT_TAG_COLOR', '0x888888'))
+        self.arrangement_tag_margin = int(os.getenv('ARRANGEMENT_TAG_MARGIN', '10'))
+        
         # Create presentation
         self.prs = Presentation()
         
@@ -115,7 +121,8 @@ class PPTXGenerator:
     
     def add_slide_with_background(self, background_path: str = None, text: str = None, 
                                  position: Dict = None, font_config: Dict = None,
-                                 text_align: str = 'center', background_color: str = '#000000'):
+                                 text_align: str = 'center', background_color: str = '#000000',
+                                 arrangement_tag: str = None):
         """Add a slide with background image/color and optional text."""
         # Use blank slide layout
         slide_layout = self.prs.slide_layouts[6]
@@ -220,6 +227,39 @@ class PPTXGenerator:
                 font.name = self.font_family
                 font.size = Pt(self.font_size)
                 font.color.rgb = RGBColor(*self.font_color)
+            
+            # Add text shadow if enabled
+            self._add_text_shadow_to_run(run)
+        
+        # Add arrangement tag if provided and enabled
+        if arrangement_tag and self.show_arrangement_tag:
+            # Calculate position for bottom right corner
+            tag_width = Inches(1.5)
+            tag_height = Inches(0.5)
+            tag_left = self.prs.slide_width - tag_width - Inches(self.arrangement_tag_margin / 96.0)
+            tag_top = self.prs.slide_height - tag_height - Inches(self.arrangement_tag_margin / 96.0)
+            
+            # Add text box for arrangement tag
+            tag_box = slide.shapes.add_textbox(tag_left, tag_top, tag_width, tag_height)
+            tag_frame = tag_box.text_frame
+            tag_frame.clear()
+            tag_frame.margin_left = Inches(0)
+            tag_frame.margin_right = Inches(0)
+            tag_frame.margin_top = Inches(0)
+            tag_frame.margin_bottom = Inches(0)
+            
+            # Add the tag text
+            p = tag_frame.paragraphs[0]
+            p.alignment = PP_ALIGN.RIGHT
+            
+            run = p.add_run()
+            run.text = arrangement_tag
+            
+            # Set font properties
+            font = run.font
+            font.name = self.font_family
+            font.size = Pt(self.arrangement_tag_font_size)
+            font.color.rgb = RGBColor(*self.arrangement_tag_color)
             
             # Add text shadow if enabled
             self._add_text_shadow_to_run(run)
@@ -377,7 +417,8 @@ class PPTXGenerator:
                 # Create slide
                 self.add_slide_with_background(
                     str(background_image) if background_image else None,
-                    text
+                    text,
+                    arrangement_tag=section_name
                 )
     
     def _parse_song_file(self, filepath: str) -> Tuple[Dict[str, List[str]], List[str]]:

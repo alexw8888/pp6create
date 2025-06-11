@@ -158,7 +158,10 @@ class UnifiedPresentationGenerator:
     
     def _generate_pro6(self, source_dir: str, output_base: str, **kwargs) -> str:
         """Generate ProPresenter 6 document"""
-        generator = PP6Generator()
+        # Create PP6 generator with dimensions from kwargs
+        width = kwargs.get('width', 1024)
+        height = kwargs.get('height', 768)
+        generator = PP6Generator(width=width, height=height)
         output_file = f"{output_base}.pro6"
         
         # Check for JSON files first
@@ -185,7 +188,8 @@ class UnifiedPresentationGenerator:
             if is_song and song_file:
                 # Generate as song
                 title = kwargs.get('title', output_base)
-                doc = generator.create_song_document(title, str(song_file))
+                lines_per_slide = kwargs.get('lines_per_slide', None)
+                doc = generator.create_song_document(title, str(song_file), lines_per_slide)
                 xml_content = generator.format_xml(doc)
                 with open(output_file, 'w', encoding='utf-8') as f:
                     f.write(xml_content)

@@ -126,7 +126,8 @@ class UnifiedPresentationGenerator:
             # Create single PPTX generator instance
             generator = PPTXGenerator(
                 width=kwargs.get('width', 1024),
-                height=kwargs.get('height', 768)
+                height=kwargs.get('height', 768),
+                song_background=not kwargs.get('no_song_bg', False)
             )
             
             # Process each subdirectory
@@ -205,7 +206,11 @@ class UnifiedPresentationGenerator:
         # Create PowerPoint generator with optional dimensions
         width = kwargs.get('width', 1024)
         height = kwargs.get('height', 768)
-        generator = PPTXGenerator(width=width, height=height)
+        generator = PPTXGenerator(
+            width=width,
+            height=height,
+            song_background=not kwargs.get('no_song_bg', False)
+        )
         
         # Override settings if provided
         if 'font_size' in kwargs:
@@ -251,6 +256,8 @@ def main():
     parser.add_argument('--height', type=int, default=768, help='Slide height in pixels')
     parser.add_argument('--font-size', type=int, help='Font size for text')
     parser.add_argument('--lines-per-slide', type=int, help='Lines per slide for songs')
+    parser.add_argument('--no-song-bg', '--no_song_bg', dest='no_song_bg', action='store_true',
+                       help='Disable background color and image for song slides')
     
     # Parse arguments
     args = parser.parse_args()
@@ -270,6 +277,8 @@ def main():
         kwargs['font_size'] = args.font_size
     if args.lines_per_slide:
         kwargs['lines_per_slide'] = args.lines_per_slide
+    if args.no_song_bg:
+        kwargs['no_song_bg'] = True
     
     try:
         # Generate presentation(s)

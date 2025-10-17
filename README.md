@@ -49,6 +49,9 @@ python generate_presentation.py --source source_materials/1 --format pro6
 
 # Generate PowerPoint only
 python generate_presentation.py --source source_materials/1 --format pptx
+
+# no song BG in pptx
+python generate_presentation.py --no_song_bg
 ```
 
 ## Source Materials Directory Structure

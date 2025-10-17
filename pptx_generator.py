@@ -24,9 +24,10 @@ load_dotenv()
 
 
 class PPTXGenerator:
-    def __init__(self, width=1024, height=768):
+    def __init__(self, width=1024, height=768, song_background: bool = True):
         self.width = width
         self.height = height
+        self.song_background_enabled = song_background
         
         # Default settings (can be overridden)
         self.font_size = int(os.getenv('PPTX_FONT_SIZE', os.getenv('FONT_SIZE', '40')))
@@ -122,55 +123,56 @@ class PPTXGenerator:
     def add_slide_with_background(self, background_path: str = None, text: str = None, 
                                  position: Dict = None, font_config: Dict = None,
                                  text_align: str = 'center', background_color: str = '#000000',
-                                 arrangement_tag: str = None):
+                                 arrangement_tag: str = None, apply_background: bool = True):
         """Add a slide with background image/color and optional text."""
         # Use blank slide layout
         slide_layout = self.prs.slide_layouts[6]
         slide = self.prs.slides.add_slide(slide_layout)
         
-        # Add background color first
-        bg_shape = slide.shapes.add_shape(
-            MSO_SHAPE.RECTANGLE,
-            Inches(0), Inches(0),
-            self.prs.slide_width, self.prs.slide_height
-        )
-        bg_shape.fill.solid()
+        if apply_background:
+            # Add background color first
+            bg_shape = slide.shapes.add_shape(
+                MSO_SHAPE.RECTANGLE,
+                Inches(0), Inches(0),
+                self.prs.slide_width, self.prs.slide_height
+            )
+            bg_shape.fill.solid()
+            
+            # Parse background color
+            bg_color_rgb = self._parse_color(background_color)
+            bg_shape.fill.fore_color.rgb = RGBColor(*bg_color_rgb)
+            bg_shape.line.color.rgb = RGBColor(*bg_color_rgb)
         
-        # Parse background color
-        bg_color_rgb = self._parse_color(background_color)
-        bg_shape.fill.fore_color.rgb = RGBColor(*bg_color_rgb)
-        bg_shape.line.color.rgb = RGBColor(*bg_color_rgb)
-        
-        # Load and add image with preserved aspect ratio
-        if background_path and os.path.exists(background_path):
-            with Image.open(background_path) as img:
-                img_width, img_height = img.size
+            # Load and add image with preserved aspect ratio
+            if background_path and os.path.exists(background_path):
+                with Image.open(background_path) as img:
+                    img_width, img_height = img.size
+                    
+                # Calculate aspect ratios
+                slide_aspect = self.prs.slide_width / self.prs.slide_height
+                img_aspect = img_width / img_height
                 
-            # Calculate aspect ratios
-            slide_aspect = self.prs.slide_width / self.prs.slide_height
-            img_aspect = img_width / img_height
-            
-            # Calculate dimensions to preserve aspect ratio
-            if img_aspect > slide_aspect:
-                # Image is wider - fit to width
-                new_width = self.prs.slide_width
-                new_height = self.prs.slide_width / img_aspect
-                left = Inches(0)
-                top = (self.prs.slide_height - new_height) / 2
-            else:
-                # Image is taller - fit to height
-                new_height = self.prs.slide_height
-                new_width = self.prs.slide_height * img_aspect
-                left = (self.prs.slide_width - new_width) / 2
-                top = Inches(0)
-            
-            # Add the image
-            pic = slide.shapes.add_picture(background_path, left, top, 
-                                         width=new_width, height=new_height)
-            
-            # Send picture to back (but in front of black background)
-            slide.shapes._spTree.remove(pic._element)
-            slide.shapes._spTree.insert(3, pic._element)
+                # Calculate dimensions to preserve aspect ratio
+                if img_aspect > slide_aspect:
+                    # Image is wider - fit to width
+                    new_width = self.prs.slide_width
+                    new_height = self.prs.slide_width / img_aspect
+                    left = Inches(0)
+                    top = (self.prs.slide_height - new_height) / 2
+                else:
+                    # Image is taller - fit to height
+                    new_height = self.prs.slide_height
+                    new_width = self.prs.slide_height * img_aspect
+                    left = (self.prs.slide_width - new_width) / 2
+                    top = Inches(0)
+                
+                # Add the image
+                pic = slide.shapes.add_picture(background_path, left, top, 
+                                             width=new_width, height=new_height)
+                
+                # Send picture to back (but in front of black background)
+                slide.shapes._spTree.remove(pic._element)
+                slide.shapes._spTree.insert(3, pic._element)
         
         # Add text if provided
         if text:
@@ -415,10 +417,12 @@ class PPTXGenerator:
                 text = '\n'.join(line.strip() for line in page_lines if line.strip())
                 
                 # Create slide
+                background_path = str(background_image) if background_image else None
                 self.add_slide_with_background(
-                    str(background_image) if background_image else None,
+                    background_path if self.song_background_enabled else None,
                     text,
-                    arrangement_tag=section_name
+                    arrangement_tag=section_name,
+                    apply_background=self.song_background_enabled
                 )
     
     def _parse_song_file(self, filepath: str) -> Tuple[Dict[str, List[str]], List[str]]:

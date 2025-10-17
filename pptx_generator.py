@@ -410,20 +410,24 @@ class PPTXGenerator:
                 continue
             
             section_lines = sections[section_name]
+            page_number = 1
             
             # Split section into pages
             for i in range(0, len(section_lines), self.page_break_every):
                 page_lines = section_lines[i:i + self.page_break_every]
                 text = '\n'.join(line.strip() for line in page_lines if line.strip())
+                if not text:
+                    continue
                 
                 # Create slide
                 background_path = str(background_image) if background_image else None
                 self.add_slide_with_background(
                     background_path if self.song_background_enabled else None,
                     text,
-                    arrangement_tag=section_name,
+                    arrangement_tag=f"{section_name} {page_number}",
                     apply_background=self.song_background_enabled
                 )
+                page_number += 1
     
     def _parse_song_file(self, filepath: str) -> Tuple[Dict[str, List[str]], List[str]]:
         """Parse song file to extract sections and arrangement."""
